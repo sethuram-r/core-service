@@ -1,11 +1,15 @@
 package smarshare.coreservice.read.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.read.model.Bucket;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,11 +19,13 @@ import java.util.Map;
 public class ReadService {
 
     private S3Service s3Service;
+    private ObjectMapper jsonConverter;
     private List<Bucket> bucketList = null;
 
     @Autowired
-    ReadService(S3Service s3Service){
+    ReadService(S3Service s3Service, ObjectMapper jsonConverter) {
         this.s3Service = s3Service;
+        this.jsonConverter = jsonConverter;
     }
 
     public List<Bucket> getBucketListFromS3() {
@@ -51,7 +57,18 @@ public class ReadService {
             } );
         }
         return (downloadedFiles);
+    }
 
-
+    @KafkaListener(topics = "read")
+    public void consume(String bucketToBeUpdatedInInternalCache, ConsumerRecord record) throws IOException {
+        System.out.println( "bucketToBeUpdatedInInternalCache------------->" + bucketToBeUpdatedInInternalCache );
+        System.out.println( "record--------->" + record );
+        if (record.key() == ("add")) {
+            log.info( "Consumed Cache add Event" );
+            Bucket bucketToBeAddedInCache = jsonConverter.readValue( bucketToBeUpdatedInInternalCache, Bucket.class );
+            System.out.println( "result----file----->" + bucketToBeAddedInCache );
+            bucketList.add( bucketToBeAddedInCache );
+            log.info( "Bucket has been added in the cache" );
+        }
     }
 }

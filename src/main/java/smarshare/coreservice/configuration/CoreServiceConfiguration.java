@@ -1,5 +1,4 @@
-package smarshare.coreservice.read.configuration;
-
+package smarshare.coreservice.configuration;
 
 
 import com.amazonaws.auth.AWSCredentials;
@@ -7,7 +6,6 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,16 +35,12 @@ public class CoreServiceConfiguration {
     }
 
     @Bean
-    public AmazonS3 amazonS3Client(AWSCredentialsProvider awsCredentialsProvider, @Value( "${cloud.aws.region.static}" ) String region){
+    public AmazonS3 amazonS3Client(AWSCredentialsProvider awsCredentialsProvider, @Value("${cloud.aws.region.static}") String region) {
         return AmazonS3ClientBuilder
                 .standard()
-                .withCredentials(awsCredentialsProvider  )
+                .withCredentials( awsCredentialsProvider )
                 .withRegion( region )
                 .build();
     }
 
-    @Bean
-    public ObjectMapper objectToJsonConverter() {
-        return new ObjectMapper();
-    }
 }
