@@ -28,7 +28,7 @@ public class WriteService {
     }
 
     public Status createBucketInStorage(Bucket bucket) {
-        log.info( "Inside create createBucketInStorage" );
+        log.info( "Inside createBucketInStorage" );
         Status createBucketStatus = s3Service.createBucket( bucket );
         if (createBucketStatus.getMessage().equals( "Success" )) {
             try {
@@ -40,5 +40,20 @@ public class WriteService {
             return createBucketStatus;
         }
         return createBucketStatus;
+    }
+
+    public Status deleteBucketInStorage(Bucket bucket) {
+        log.info( "Inside deleteBucketInStorage" );
+        Status deleteBucketStatus = s3Service.deleteBucket( bucket );
+        if (deleteBucketStatus.getMessage().equals( "Success" )) {
+            try {
+                ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "read", "delete", jsonConverter.writeValueAsString( bucket ) );
+                if (!producerResult.get().getRecordMetadata().toString().isEmpty()) return deleteBucketStatus;
+            } catch (Exception exception) {
+                log.error( " Exception while publishing user to Kafka " + exception.getCause() + exception.getMessage() );
+            }
+            return deleteBucketStatus;
+        }
+        return deleteBucketStatus;
     }
 }

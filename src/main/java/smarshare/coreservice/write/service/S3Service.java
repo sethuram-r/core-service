@@ -2,6 +2,7 @@ package smarshare.coreservice.write.service;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -9,12 +10,15 @@ import smarshare.coreservice.write.exception.BucketExistException;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.Status;
 
+import java.util.List;
+
 @Slf4j
 @Service
 public class S3Service {
 
     private AmazonS3 amazonS3Client;
     private Status status;
+
 
     @Autowired
     S3Service(AmazonS3 amazonS3Client, Status status) {
@@ -38,6 +42,26 @@ public class S3Service {
                 status.setMessage( "Failed" );
                 return status;
             }
+        }
+    }
+
+    public Status deleteBucket(Bucket bucket) {
+        log.info( "Inside deleteBucket in S3Service" ); // un-versioned bucket
+
+        try {
+            List<S3ObjectSummary> objectsInGivenBucket = amazonS3Client.listObjects( bucket.getName() ).getObjectSummaries();
+            if (!objectsInGivenBucket.isEmpty()) {
+                objectsInGivenBucket.forEach( objectSummary -> {
+                    amazonS3Client.deleteObject( bucket.getName(), objectSummary.getKey() );
+                } );
+            }
+            amazonS3Client.deleteBucket( bucket.getName() );
+            status.setMessage( "Success" );
+            return status;
+        } catch (Exception e) {
+            log.error( "Exception while deleting the bucket------->" + e.getMessage() );
+            status.setMessage( "Failed" );
+            return status;
         }
     }
 }

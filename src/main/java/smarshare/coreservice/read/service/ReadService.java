@@ -60,15 +60,29 @@ public class ReadService {
     }
 
     @KafkaListener(topics = "read")
-    public void consume(String bucketToBeUpdatedInInternalCache, ConsumerRecord record) throws IOException {
-        System.out.println( "bucketToBeUpdatedInInternalCache------------->" + bucketToBeUpdatedInInternalCache );
+    public void consume(String bucketToBeUpdatedOrDeletedInInternalCache, ConsumerRecord record) throws IOException {
+        System.out.println( "bucketToBeUpdatedInInternalCache------------->" + bucketToBeUpdatedOrDeletedInInternalCache );
         System.out.println( "record--------->" + record );
+
         if (record.key() == ("add")) {
             log.info( "Consumed Cache add Event" );
-            Bucket bucketToBeAddedInCache = jsonConverter.readValue( bucketToBeUpdatedInInternalCache, Bucket.class );
+            Bucket bucketToBeAddedInCache = jsonConverter.readValue( bucketToBeUpdatedOrDeletedInInternalCache, Bucket.class );
             System.out.println( "result----file----->" + bucketToBeAddedInCache );
-            bucketList.add( bucketToBeAddedInCache );
-            log.info( "Bucket has been added in the cache" );
+            if (!bucketList.isEmpty()) {
+                bucketList.add( bucketToBeAddedInCache );
+                log.info( "Bucket has been added in the cache" );
+            }
+
+        }
+        if (record.key() == ("delete")) {
+            log.info( "Consumed Cache delete Event" );
+            Bucket bucketToBeDeletedInCache = jsonConverter.readValue( bucketToBeUpdatedOrDeletedInInternalCache, Bucket.class );
+            System.out.println( "result----file----->" + bucketToBeDeletedInCache );
+            if (!bucketList.isEmpty()) {
+                bucketList.remove( bucketToBeDeletedInCache );
+                log.info( "Bucket has been deleted from the cache" );
+            }
+
         }
     }
 }

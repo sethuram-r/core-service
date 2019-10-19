@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import smarshare.coreservice.write.model.Bucket;
+import smarshare.coreservice.write.model.Status;
 import smarshare.coreservice.write.service.WriteService;
 
 
@@ -23,9 +24,18 @@ public class WriteController {
 
 
     @PostMapping(value = "/bucket/create")
-    public void createBucket(@RequestBody Bucket bucket) {
+    public Status createBucket(@RequestBody Bucket bucket) {
         log.info( "Inside createBucket" );
-        writeService.createBucketInStorage( bucket );
+        return writeService.createBucketInStorage( bucket );
 
     }
+
+    @DeleteMapping(value = "/bucket/delete")
+    public void deleteBucket(@RequestBody Bucket bucket) {
+        log.info( "Inside createBucket" );
+        writeService.deleteBucketInStorage( bucket );
+
+    }
+
+
 }
