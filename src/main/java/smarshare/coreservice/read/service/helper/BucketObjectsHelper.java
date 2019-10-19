@@ -16,6 +16,7 @@ public class BucketObjectsHelper {
 
     private Pattern fileExtensionRegex = Pattern.compile( "(.*)([a-zA-Z0-9\\s_\\\\.\\-\\(\\):])+(\\..*)$" );
 
+
     private FolderComponent fileStructureConverter(List<String> extractedKeys, String bucketName) {
         log.info( "Inside fileStructureConverter" );
 

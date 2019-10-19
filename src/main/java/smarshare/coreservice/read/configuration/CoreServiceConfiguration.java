@@ -7,6 +7,7 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,5 +43,10 @@ public class CoreServiceConfiguration {
                 .withCredentials(awsCredentialsProvider  )
                 .withRegion( region )
                 .build();
+    }
+
+    @Bean
+    public ObjectMapper objectToJsonConverter() {
+        return new ObjectMapper();
     }
 }
