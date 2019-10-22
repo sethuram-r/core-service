@@ -17,7 +17,7 @@ import java.util.List;
 
     public BucketComponent add (BucketComponent file){
         file.owner = this.owner;
-        file.accessInfo = this.accessInfo;
+        if (file.accessInfo == null) file.accessInfo = this.accessInfo;
         bucketComponents.add( file );
         return file;
     }

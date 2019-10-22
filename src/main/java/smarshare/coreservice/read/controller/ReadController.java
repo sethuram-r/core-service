@@ -41,7 +41,7 @@ public class ReadController {
         return readService.getFilesAndFoldersListByUserAndBucket( "sethuram", "file.server.1" );
     }
 
-    @GetMapping(value = "file")
+    @GetMapping(value = "file/download")
     public ResponseEntity<Resource> getFileForIndividualUserForParticularBucket(@RequestParam String objectName, @RequestParam(defaultValue = "motivation.pdf") String fileName, @RequestParam(defaultValue = "file.server.1") String bucketName) {
         log.info( "Inside getFileForIndividualUserForParticularBucket" );
         return ResponseEntity.ok()
@@ -50,7 +50,7 @@ public class ReadController {
                 .body( readService.downloadFile( objectName, fileName, bucketName ).get( fileName ) );
     }
 
-    @GetMapping(value = "folder")
+    @GetMapping(value = "folder/download")
     public ResponseEntity<List<Map<String, Resource>>> getFolderForIndividualUserForParticularBucket() {
         log.info( "Inside getFolderForIndividualUserForParticularBucket" );
         // Stub

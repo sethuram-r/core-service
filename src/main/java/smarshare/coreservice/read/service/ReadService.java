@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.read.model.Bucket;
 
@@ -18,34 +17,34 @@ import java.util.Map;
 @Service
 public class ReadService {
 
-    private S3Service s3Service;
+    private S3ReadService s3ReadService;
     private ObjectMapper jsonConverter;
     private List<Bucket> bucketList = null;
 
     @Autowired
-    ReadService(S3Service s3Service, ObjectMapper jsonConverter) {
-        this.s3Service = s3Service;
+    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter) {
+        this.s3ReadService = s3ReadService;
         this.jsonConverter = jsonConverter;
     }
 
     public List<Bucket> getBucketListFromS3() {
         log.info( "Inside getBucketListFromS3" );
         if (bucketList == null){
-            bucketList = s3Service.listBuckets();
+            bucketList = s3ReadService.listBuckets();
         }
         return bucketList;
     }
 
     public List<Bucket> getFilesAndFoldersListByUserAndBucket(String userName, String bucketName) {
         log.info( "Inside getFilesAndFoldersByUserAndBucket" );
-        s3Service.listObjects(userName, bucketName );
+        s3ReadService.listObjects( userName, bucketName );
         return null;
     }
 
     public Map<String, Resource> downloadFile(String objectName, String fileName, String bucketName) {
         log.info( "Inside downloadFile" );
         /* have to implement cache logic */
-        return s3Service.getObject( objectName, fileName, bucketName );
+        return s3ReadService.getObject( objectName, fileName, bucketName );
     }
 
     public List<Map<String, Resource>> downloadFolder(Map<String, Map<String, String>> fileNameWrapper) {
@@ -53,13 +52,13 @@ public class ReadService {
         List<Map<String, Resource>> downloadedFiles = new ArrayList<>();
         for (Map.Entry<String, Map<String, String>> eachFile : fileNameWrapper.entrySet()) {
             eachFile.getValue().forEach( (objectName, bucketName) -> {
-                downloadedFiles.add( s3Service.getObject( objectName, eachFile.getKey(), bucketName ) );
+                downloadedFiles.add( s3ReadService.getObject( objectName, eachFile.getKey(), bucketName ) );
             } );
         }
         return (downloadedFiles);
     }
 
-    @KafkaListener(topics = "read")
+    //    @KafkaListener(groupId="readConsumer",topics = "read")
     public void consume(String bucketToBeUpdatedOrDeletedInInternalCache, ConsumerRecord record) throws IOException {
         System.out.println( "bucketToBeUpdatedInInternalCache------------->" + bucketToBeUpdatedOrDeletedInInternalCache );
         System.out.println( "record--------->" + record );

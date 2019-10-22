@@ -22,7 +22,7 @@ import java.util.Map;
 
 @Slf4j
 @Service
-public class S3Service {
+public class S3ReadService {
 
     private AmazonS3 amazonS3Client;
     private BucketObjectsHelper bucketObjectsHelper;
@@ -30,7 +30,7 @@ public class S3Service {
 
 
     @Autowired
-    S3Service(AmazonS3 amazonS3Client, BucketObjectsHelper bucketObjectsHelper, ObjectMapper objectToJsonConverter) {
+    S3ReadService(AmazonS3 amazonS3Client, BucketObjectsHelper bucketObjectsHelper, ObjectMapper objectToJsonConverter) {
         this.amazonS3Client = amazonS3Client;
         this.bucketObjectsHelper = bucketObjectsHelper;
         this.objectToJsonConverter = objectToJsonConverter;
