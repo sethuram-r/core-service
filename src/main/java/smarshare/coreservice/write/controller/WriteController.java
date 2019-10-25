@@ -8,6 +8,7 @@ import smarshare.coreservice.write.model.*;
 import smarshare.coreservice.write.service.WriteService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -66,13 +67,11 @@ public class WriteController {
     }
 
 
-    @PostMapping(value = "file")
-    public void uploadFile(@RequestBody FileToUpload fileToUpload) {
+    @PostMapping(value = "object")
+    public void uploadObject(@RequestBody FileToUpload[] filesToUpload) {
         log.info( "Inside uploadFile " );
-        System.out.println( fileToUpload );
-        System.out.println( fileToUpload.getUploadedFileName() );
-        writeService.uploadFileToS3( fileToUpload );
-        // uploading single file is completed but multiple file is not done yet
+        // have to spin up a new thread so that its doesn't create a non blocking scenario.
+        writeService.uploadObjectToS3( Arrays.asList( filesToUpload ) );
     }
 
 

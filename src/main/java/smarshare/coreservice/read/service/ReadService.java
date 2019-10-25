@@ -44,11 +44,13 @@ public class ReadService {
     public Map<String, Resource> downloadFile(String objectName, String fileName, String bucketName) {
         log.info( "Inside downloadFile" );
         /* have to implement cache logic */
+        // no need to lock the folder but have to check the lock status
         return s3ReadService.getObject( objectName, fileName, bucketName );
     }
 
     public List<Map<String, Resource>> downloadFolder(Map<String, Map<String, String>> fileNameWrapper) {
         log.info( "Inside downloadFolder" );
+        // no need to lock the folder but have to check the lock status
         List<Map<String, Resource>> downloadedFiles = new ArrayList<>();
         for (Map.Entry<String, Map<String, String>> eachFile : fileNameWrapper.entrySet()) {
             eachFile.getValue().forEach( (objectName, bucketName) -> {

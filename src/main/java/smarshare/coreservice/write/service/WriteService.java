@@ -1,5 +1,7 @@
 package smarshare.coreservice.write.service;
 
+import com.amazonaws.services.s3.transfer.Transfer;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,10 +13,12 @@ import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.File;
 import smarshare.coreservice.write.model.FileToUpload;
 import smarshare.coreservice.write.model.Status;
-import smarshare.coreservice.write.model.lock.Folder;
+import smarshare.coreservice.write.model.lock.S3Object;
+import smarshare.coreservice.write.model.lock.S3ObjectsWrapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @Service
@@ -73,7 +77,7 @@ public class WriteService {
     public Status deleteFileInStorage(File file, String bucketName) {
         log.info( "Inside deleteFileInStorage" );
         try {
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "file", jsonConverter.writeValueAsString( new smarshare.coreservice.write.model.lock.File( file.getFileName(), Boolean.TRUE ) ) );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "object", jsonConverter.writeValueAsString( new S3Object( file.getFileName(), Boolean.TRUE ) ) );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty())
                 return s3WriteService.deleteObject( file.getFileName(), bucketName );
         } catch (Exception exception) {
@@ -88,16 +92,15 @@ public class WriteService {
     public Status deleteFolderInStorage(List<String> folderObjects, String bucketName) {
         log.info( "Inside deleteFolderInStorage" );
         try {
-            String folderName = folderObjects.get( 0 ).replace( "/", " " ).trim();
-            List<smarshare.coreservice.write.model.lock.File> objectsInTheFolder = new ArrayList<>();
-            System.out.println( "folderName---------------->" + folderName );
-            folderObjects.forEach( object -> {
-                if (!object.contains( folderName )) {
-                    objectsInTheFolder.add( new smarshare.coreservice.write.model.lock.File( object, Boolean.TRUE ) );
-                }
-            } );
-            Folder folder = new Folder( folderName, objectsInTheFolder, Boolean.TRUE );
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "folder", jsonConverter.writeValueAsString( folder ) );
+            List<S3Object> objectsToBeLocked = new ArrayList<>();
+            if (null != folderObjects) {
+                folderObjects.forEach( object -> {
+                    objectsToBeLocked.add( new S3Object( object, Boolean.TRUE ) );
+                } );
+            } else {
+                throw new NullPointerException( "Empty Objects Sent For Locking Operation" );
+            }
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "objects", jsonConverter.writeValueAsString( new S3ObjectsWrapper( objectsToBeLocked ) ) );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty())
                 return s3WriteService.deleteObjects( folderObjects, bucketName );
         } catch (Exception exception) {
@@ -109,12 +112,40 @@ public class WriteService {
         return null;
     }
 
-    public void uploadFileToS3(FileToUpload fileToUpload) {
-        log.info( "inside uploadFileToS3 " );
-        //lock
-        // uploading tos3
-        s3WriteService.uploadObject( fileToUpload );
-        // publish event to access management server
+    private ListenableFuture<SendResult<String, String>> lockTheGivenObjects(List<FileToUpload> filesToUpload) {
+        List<S3Object> objectsToBeLocked = new ArrayList<>();
+        try {
+            filesToUpload.forEach( fileToUpload -> {
+                objectsToBeLocked.add( new S3Object( fileToUpload.getUploadedFileName(), Boolean.TRUE ) );
+            } );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "objects", jsonConverter.writeValueAsString( new S3ObjectsWrapper( objectsToBeLocked ) ) );
+            return producerResult;
+        } catch (JsonProcessingException e) {
+            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
+        }
+        return null;
+    }
+
+
+    // Have to implement distributed transactions in future
+
+    public void uploadObjectToS3(List<FileToUpload> filesToUpload) {
+        log.info( "inside uploadObjectToS3 " );
+        try {
+            List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
+            ListenableFuture<SendResult<String, String>> producerResult = lockTheGivenObjects( filesToUpload );
+            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
+                filesToUpload.forEach( fileToUpload -> {
+                    s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
+                } );
+            }
+            if (s3uploadResult.contains( Transfer.TransferState.Completed )) {
+                //access Management call to publish details to access management server
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
+        }
+
         //update local cache.
 
     }

@@ -4,8 +4,10 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.s3.transfer.Transfer;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.Upload;
+import com.amazonaws.services.s3.transfer.model.UploadResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
@@ -128,20 +130,32 @@ public class S3WriteService {
         }
     }
 
-    public void uploadObject(FileToUpload fileToUpload) {
+    public Transfer.TransferState uploadObject(FileToUpload fileToUpload) {
         log.info( "Inside uploadObject" );
-        ObjectMetadata metadata = new ObjectMetadata();
-        byte[] base64DecodedContentInByteArray = Base64.getDecoder().decode( fileToUpload.getUploadedFileContent().split( "base64," )[1] );
-        InputStream inputStreamOfFileContent = new ByteArrayInputStream( base64DecodedContentInByteArray );
-        metadata.setContentLength( base64DecodedContentInByteArray.length );
-        PutObjectRequest request = new PutObjectRequest(
-                fileToUpload.getBucketName(),
-                fileToUpload.getSelectedFolderWhereFolderHasToBeUploaded() + fileToUpload.getUploadedFileName(),
-                inputStreamOfFileContent, metadata );
-        Upload uploadedObject = transferManager.upload( request );
-        uploadedObject.addProgressListener( (ProgressListener) progressEvent -> log.info( "Transferred bytes of object " + fileToUpload.getUploadedFileName() + " : " + progressEvent.getBytesTransferred() ) );
+        try {
+            ObjectMetadata metadata = new ObjectMetadata();
+            byte[] base64DecodedContentInByteArray = Base64.getDecoder().decode( fileToUpload.getUploadedFileContent() );
+            InputStream inputStreamOfFileContent = new ByteArrayInputStream( base64DecodedContentInByteArray );
+            metadata.setContentLength( base64DecodedContentInByteArray.length );
+            PutObjectRequest request = new PutObjectRequest(
+                    fileToUpload.getBucketName(),
+                    fileToUpload.getSelectedFolderWhereFolderHasToBeUploaded() + fileToUpload.getUploadedFileName(),
+                    inputStreamOfFileContent, metadata );
+            Upload uploadedObject = transferManager.upload( request );
+            uploadedObject.addProgressListener( (ProgressListener) progressEvent -> {
+                log.info( "Transferred bytes of object " + fileToUpload.getUploadedFileName() + " : " + progressEvent.getBytesTransferred() );
+            } );
+            UploadResult result = uploadedObject.waitForUploadResult();
+            transferManager.shutdownNow();// have to verify use of the shutdown method
+            if (null != result.getVersionId()) {
+                log.info( "Transfer of Object " + fileToUpload.getUploadedFileName() + " : " + Transfer.TransferState.Completed );
+                return Transfer.TransferState.Completed;
+            }
+        } catch (InterruptedException e) {
+            log.error( String.format( "Exception occurred while uploading %s", e.getMessage() ) );
+        }
+        return Transfer.TransferState.Failed;
     }
-
 
 
 }
