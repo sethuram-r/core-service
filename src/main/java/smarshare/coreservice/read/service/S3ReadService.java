@@ -8,17 +8,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.read.model.Bucket;
+import smarshare.coreservice.read.model.S3DownloadObject;
+import smarshare.coreservice.read.model.S3DownloadedObject;
 import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
 import smarshare.coreservice.read.service.helper.BucketObjectsHelper;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -69,17 +68,16 @@ public class S3ReadService {
     }
 
 
-    public Map<String, Resource> getObject(String objectName, String fileName, String bucketName) {
+    public S3DownloadedObject getObject(S3DownloadObject s3DownloadObject) {
         log.info( "Inside getObject" );
 
         // have to check parameters and flow
         try {
-            S3Object downloadedObject = amazonS3Client.getObject( bucketName, objectName );
+            S3Object downloadedObject = amazonS3Client.getObject( s3DownloadObject.getBucketName(), s3DownloadObject.getObjectName() );
             byte[] downloadedObjectInByteArrayFormat = ByteStreams.toByteArray( downloadedObject.getObjectContent() );
             BASE64DecodedMultipartFile downloadedObjectInMultipartFile = new BASE64DecodedMultipartFile( downloadedObjectInByteArrayFormat );
-            Map<String, Resource> downloadedFile = new HashMap<>();
-            downloadedFile.put( objectName, downloadedObjectInMultipartFile.getResource() );
-            return downloadedFile;
+
+            return new S3DownloadedObject( s3DownloadObject, downloadedObjectInMultipartFile.getResource() );
         } catch (AmazonServiceException e) {
             log.error( e.getErrorMessage() );
         } catch (IOException e) {
