@@ -1,5 +1,7 @@
 package smarshare.coreservice.read.model.filestructure;
 
+import smarshare.coreservice.read.dto.AccessingUserInfoForApi;
+
 import java.io.Serializable;
 
 public class AccessInfo  implements Serializable {
@@ -12,6 +14,12 @@ public class AccessInfo  implements Serializable {
         this.read = read;
         this.write = write;
         this.delete = delete;
+    }
+
+    public AccessInfo(AccessingUserInfoForApi accessingUserInfo) {
+        this.read = accessingUserInfo.getRead();
+        this.write = accessingUserInfo.getWrite();
+        this.delete = accessingUserInfo.getDelete();
     }
 
     public Boolean getRead() {

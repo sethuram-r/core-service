@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import smarshare.coreservice.read.dto.BucketMetadata;
 import smarshare.coreservice.read.model.Bucket;
 import smarshare.coreservice.read.model.S3DownloadObject;
 import smarshare.coreservice.read.model.S3DownloadedObject;
@@ -12,6 +13,8 @@ import smarshare.coreservice.read.model.S3DownloadedObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -21,12 +24,15 @@ public class ReadService {
     private ObjectMapper jsonConverter;
     private List<Bucket> bucketList = null;
     private LockServerAPIService lockServerAPIService;
+    private AccessManagementAPIService accessManagementAPIService;
 
     @Autowired
-    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter, LockServerAPIService lockServerAPIService) {
+    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter,
+                LockServerAPIService lockServerAPIService, AccessManagementAPIService accessManagementAPIService) {
         this.s3ReadService = s3ReadService;
         this.jsonConverter = jsonConverter;
         this.lockServerAPIService = lockServerAPIService;
+        this.accessManagementAPIService = accessManagementAPIService;
     }
 
     public List<Bucket> getBucketListFromS3() {
@@ -37,10 +43,23 @@ public class ReadService {
         return bucketList;
     }
 
-    public List<Bucket> getFilesAndFoldersListByUserAndBucket(String userName, String bucketName) {
+    // have to be used from controller
+    public List<Bucket> getBucketListFromSpecificUser(String userName) {
+        log.info( "Inside getBucketListFromSpecificUser" );
+        List<Bucket> bucketsInS3 = getBucketListFromS3();
+        List<Map<String, BucketMetadata>> bucketsMetadata = accessManagementAPIService.fetchAccessDetailsForBuckets( userName );
+        for (Bucket eachBucket : bucketsInS3) {
+            Optional<Map<String, BucketMetadata>> bucketMetadata = bucketsMetadata.stream().filter( stringBucketMetadataMap -> stringBucketMetadataMap.containsKey( eachBucket.getName() ) ).findFirst();
+            bucketMetadata.ifPresent( stringBucketMetadataMap -> eachBucket.setBucketMetadata( stringBucketMetadataMap.get( eachBucket.getName() ) ) );
+        }
+        System.out.println( "bucketswithAccess ------>" + bucketsInS3 );
+        return bucketsInS3;
+    }
+
+
+    public String getFilesAndFoldersListByUserAndBucket(String userName, String bucketName) {
         log.info( "Inside getFilesAndFoldersByUserAndBucket" );
-        s3ReadService.listObjects( userName, bucketName );
-        return null;
+        return s3ReadService.listObjectsWithMetadata( userName, bucketName );
     }
 
     public S3DownloadedObject downloadFile(S3DownloadObject s3DownloadObject) {

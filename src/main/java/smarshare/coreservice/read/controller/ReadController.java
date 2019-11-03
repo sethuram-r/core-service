@@ -29,16 +29,16 @@ public class ReadController {
         this.readService = readService;
     }
 
-    @GetMapping(value = "buckets")
+    @GetMapping(value = "buckets") /// have to replace with another method specific for user
     public List<Bucket> getBucketList(){
         log.info( "Inside getBucketList" );
         return readService.getBucketListFromS3();
     }
 
     @GetMapping(value = "objects")
-    public List<Bucket> listFilesAndFoldersForIndividualUserForParticularBucket() {
+    public String listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userName") String userName, @RequestParam("bucketName") String bucketName) {
         log.info( "Inside listFilesAndFoldersForIndividualUserForParticularBucket" );
-        return readService.getFilesAndFoldersListByUserAndBucket( "sethuram", "file.server.1" );
+        return readService.getFilesAndFoldersListByUserAndBucket( userName, bucketName );
     }
 
     @GetMapping(value = "file/download")

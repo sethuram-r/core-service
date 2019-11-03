@@ -9,15 +9,18 @@ import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import smarshare.coreservice.read.dto.ObjectMetadata;
 import smarshare.coreservice.read.model.Bucket;
 import smarshare.coreservice.read.model.S3DownloadObject;
 import smarshare.coreservice.read.model.S3DownloadedObject;
 import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
+import smarshare.coreservice.read.model.filestructure.FolderComponent;
 import smarshare.coreservice.read.service.helper.BucketObjectsHelper;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -26,13 +29,17 @@ public class S3ReadService {
     private AmazonS3 amazonS3Client;
     private BucketObjectsHelper bucketObjectsHelper;
     private ObjectMapper objectToJsonConverter;
+    private AccessManagementAPIService accessManagementAPIService;
+
 
 
     @Autowired
-    S3ReadService(AmazonS3 amazonS3Client, BucketObjectsHelper bucketObjectsHelper, ObjectMapper objectToJsonConverter) {
+    S3ReadService(AmazonS3 amazonS3Client, BucketObjectsHelper bucketObjectsHelper,
+                  ObjectMapper objectToJsonConverter, AccessManagementAPIService accessManagementAPIService) {
         this.amazonS3Client = amazonS3Client;
         this.bucketObjectsHelper = bucketObjectsHelper;
         this.objectToJsonConverter = objectToJsonConverter;
+        this.accessManagementAPIService = accessManagementAPIService;
     }
 
     public List<Bucket> listBuckets(){
@@ -48,7 +55,11 @@ public class S3ReadService {
     }
 
 
-    private List<String> getObjectKeys(String userName,String bucketName){
+    private List<Map<String, ObjectMetadata>> getObjectMetaData(String bucketName, String userName) {
+        return accessManagementAPIService.fetchAccessDetailsForObjectsInBucketForSpecificUser( bucketName, userName );
+    }
+
+    private List<String> getObjectKeys(String bucketName) {
         List<String> objectKeysObtainedFromS3 = new ArrayList<>(  );
         List<S3ObjectSummary>  objectsInRawFormat = amazonS3Client.listObjectsV2(bucketName).getObjectSummaries();
         if(!objectsInRawFormat.isEmpty()){
@@ -57,14 +68,18 @@ public class S3ReadService {
             } );
         }
         System.out.println(objectKeysObtainedFromS3);
-        bucketObjectsHelper.convertKeysInFileStructureFormat( objectKeysObtainedFromS3, userName, bucketName);
-        return null;
+        return objectKeysObtainedFromS3;
     }
 
-    public void listObjects(String userName,String bucketName){
-        log.info( "Inside listObjects" );
-        getObjectKeys(userName, bucketName );
-        //objectToJsonConverter.writeValueAsString(   getObjectKeys(userName, bucketName ))
+    public String listObjectsWithMetadata(String userName, String bucketName) {
+        log.info( "Inside listObjectsWithMetadata" );
+        try {
+            FolderComponent completeFileStructure = bucketObjectsHelper.convertKeysInFileStructureFormat( getObjectKeys( bucketName ), bucketName, getObjectMetaData( bucketName, userName ) );
+            return objectToJsonConverter.writeValueAsString( completeFileStructure );
+        } catch (Exception e) {
+            log.error( "Exception while converting file structure into JSON " + e.getMessage() );
+            return "";
+        }
     }
 
 

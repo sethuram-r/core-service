@@ -9,6 +9,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.concurrent.ListenableFuture;
+import smarshare.coreservice.write.dto.BucketObjectForEvent;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.File;
 import smarshare.coreservice.write.model.FileToUpload;
@@ -19,6 +20,7 @@ import smarshare.coreservice.write.model.lock.S3ObjectsWrapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -43,8 +45,11 @@ public class WriteService {
         Status createBucketStatus = s3WriteService.createBucket( bucket );
         if (createBucketStatus.getMessage().equals( "Success" )) {
             try {
-                ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "read", "add", jsonConverter.writeValueAsString( bucket ) );
-                if (!producerResult.get().getRecordMetadata().toString().isEmpty()) return createBucketStatus;
+                ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "AccessManagement", "createBucket", jsonConverter.writeValueAsString( bucket.getName() ) );
+                ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "add", jsonConverter.writeValueAsString( bucket ) );
+                if (!(isUpdatingTheCacheEventForReadServerSent.get().getRecordMetadata().toString().isEmpty()
+                        && isAccessInfoEventSent.get().getRecordMetadata().toString().isEmpty()))
+                    return createBucketStatus;
             } catch (Exception exception) {
                 log.error( " Exception while publishing user to Kafka " + exception.getCause() + exception.getMessage() );
             }
@@ -58,8 +63,11 @@ public class WriteService {
         Status deleteBucketStatus = s3WriteService.deleteBucket( bucket );
         if (deleteBucketStatus.getMessage().equals( "Success" )) {
             try {
-                ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "read", "delete", jsonConverter.writeValueAsString( bucket ) );
-                if (!producerResult.get().getRecordMetadata().toString().isEmpty()) return deleteBucketStatus;
+                ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "AccessManagement", "deleteBucket", jsonConverter.writeValueAsString( bucket.getName() ) );
+                ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "delete", jsonConverter.writeValueAsString( bucket ) );
+                if (!(isUpdatingTheCacheEventForReadServerSent.get().getRecordMetadata().toString().isEmpty()
+                        && isAccessInfoEventSent.get().getRecordMetadata().toString().isEmpty()))
+                    return deleteBucketStatus;
             } catch (Exception exception) {
                 log.error( " Exception while publishing user to Kafka " + exception.getCause() + exception.getMessage() );
             }
@@ -68,18 +76,49 @@ public class WriteService {
         return deleteBucketStatus;
     }
 
+    /*   -------------------------------------    Bucket Object Methods   ------------------------------------        */
 
-    public Status createEmptyFolder(smarshare.coreservice.write.model.Folder folder, String bucketName) {
+    public Status createEmptyFolder(smarshare.coreservice.write.model.Folder folder, String bucketName, String owner) {
         log.info( "Inside createEmptyFolder" );
-        return s3WriteService.createObjectInSpecifiedBucket( folder, bucketName );
+        Status status = s3WriteService.createObjectInSpecifiedBucket( folder, bucketName );
+        try {
+            if (status.getMessage().equals( "Success" )) {
+                BucketObjectForEvent bucketObjectForEvent = new BucketObjectForEvent();
+                bucketObjectForEvent.setBucketName( bucketName );
+                bucketObjectForEvent.setObjectName( folder.getName() );
+                bucketObjectForEvent.setOwnerName( owner );
+                bucketObjectForEvent.setUserName( owner );
+                List<BucketObjectForEvent> bucketObjectForEvents = new ArrayList<>();
+                bucketObjectForEvents.add( bucketObjectForEvent );
+                kafkaTemplate.send( "AccessManagement", "emptyBucketObject", jsonConverter.writeValueAsString( bucketObjectForEvents ) );
+            }
+        } catch (JsonProcessingException e) {
+            log.error( "Exception while publishing createEmptyFolder event " + e.getMessage() );
+        }
+        return status;
+    }
+
+    private BucketObjectForEvent mapBucketObjectToBucketObjectEvent(String objectName, String bucketName) {
+        BucketObjectForEvent bucketObjectForDeleteEvent = new BucketObjectForEvent();
+        bucketObjectForDeleteEvent.setBucketName( bucketName );
+        bucketObjectForDeleteEvent.setObjectName( objectName );
+        return bucketObjectForDeleteEvent;
     }
 
     public Status deleteFileInStorage(File file, String bucketName) {
         log.info( "Inside deleteFileInStorage" );
         try {
             ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "object", jsonConverter.writeValueAsString( new S3Object( file.getFileName(), Boolean.TRUE ) ) );
-            if (!producerResult.get().getRecordMetadata().toString().isEmpty())
-                return s3WriteService.deleteObject( file.getFileName(), bucketName );
+            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
+                Status status = s3WriteService.deleteObject( file.getFileName(), bucketName );
+                if (status.getMessage().equals( "Success" )) {
+                    List<BucketObjectForEvent> bucketObjectForDeleteEvents = new ArrayList<>();
+                    bucketObjectForDeleteEvents.add( mapBucketObjectToBucketObjectEvent( file.getFileName(), bucketName ) );
+                    kafkaTemplate.send( "AccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectForDeleteEvents ) );
+                    return status;
+                }
+            }
+
         } catch (Exception exception) {
             log.error( " Exception while publishing lock to Kafka " + exception.getCause() + exception.getMessage() );
             Status status = new Status();
@@ -88,6 +127,7 @@ public class WriteService {
         }
         return null;
     }
+
 
     public Status deleteFolderInStorage(List<String> folderObjects, String bucketName) {
         log.info( "Inside deleteFolderInStorage" );
@@ -101,8 +141,14 @@ public class WriteService {
                 throw new NullPointerException( "Empty Objects Sent For Locking Operation" );
             }
             ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "objects", jsonConverter.writeValueAsString( new S3ObjectsWrapper( objectsToBeLocked ) ) );
-            if (!producerResult.get().getRecordMetadata().toString().isEmpty())
-                return s3WriteService.deleteObjects( folderObjects, bucketName );
+            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
+                Status status = s3WriteService.deleteObjects( folderObjects, bucketName );
+                if (status.getMessage().equals( "Success" )) {
+                    List<BucketObjectForEvent> bucketObjectsForDeleteEvent = folderObjects.stream().map( folderObject -> mapBucketObjectToBucketObjectEvent( folderObject, bucketName ) ).collect( Collectors.toList() );
+                    kafkaTemplate.send( "AccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectsForDeleteEvent ) );
+                    return status;
+                }
+            }
         } catch (Exception exception) {
             log.error( " Exception while publishing lock to Kafka " + exception.getCause() + exception.getMessage() );
             Status status = new Status();
@@ -126,6 +172,14 @@ public class WriteService {
         return null;
     }
 
+    private BucketObjectForEvent mappingUploadObjectToBucketObjectEvent(FileToUpload fileToUpload) {
+        BucketObjectForEvent bucketObjectForEvent = new BucketObjectForEvent();
+        bucketObjectForEvent.setBucketName( fileToUpload.getBucketName() );
+        bucketObjectForEvent.setObjectName( fileToUpload.getUploadedFileName() );
+        bucketObjectForEvent.setOwnerName( fileToUpload.getOwnerOfTheFile() );
+        bucketObjectForEvent.setUserName( fileToUpload.getOwnerOfTheFile() );
+        return bucketObjectForEvent;
+    }
 
     // Have to implement distributed transactions in future
 
@@ -140,7 +194,12 @@ public class WriteService {
                 } );
             }
             if (s3uploadResult.contains( Transfer.TransferState.Completed )) {
-                //access Management call to publish details to access management server
+                List<BucketObjectForEvent> uploadObjectEvents = filesToUpload.stream().map( this::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
+                try {
+                    kafkaTemplate.send( "AccessManagement", "uploadBucketObjects", jsonConverter.writeValueAsString( uploadObjectEvents ) );
+                } catch (JsonProcessingException e) {
+                    log.error( "Exception while publishing createEmptyFolder event " + e.getMessage() );
+                }
             }
         } catch (InterruptedException | ExecutionException e) {
             log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );

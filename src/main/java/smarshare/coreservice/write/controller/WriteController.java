@@ -41,10 +41,10 @@ public class WriteController {
     }
 
     @PostMapping(value = "folder/empty")
-    public Status createFolder(@RequestParam("folder") Folder folder, @RequestParam("bucketName") String bucketName) {
+    public Status createFolder(@RequestParam("folder") Folder folder, @RequestParam("bucketName") String bucketName, @RequestParam("owner") String owner) {
         log.info( "Inside createFolder" );
 //        return writeService.createEmptyFolder( "test/" , "file.server.1" );
-        return writeService.createEmptyFolder( folder, bucketName );
+        return writeService.createEmptyFolder( folder, bucketName, owner );
     }
 
     // @RequestParam("file") MultipartFile file
