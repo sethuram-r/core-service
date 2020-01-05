@@ -18,6 +18,14 @@ public class FileToBeCached {
         return fileContentInBase64;
     }
 
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public void setFileContentInBase64(String fileContentInBase64) {
+        this.fileContentInBase64 = fileContentInBase64;
+    }
+
     @Override
     public String toString() {
         return "FileToBeCached{" +
