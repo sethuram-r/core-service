@@ -2,7 +2,7 @@ package smarshare.coreservice.cache;
 
 import com.oracle.tools.packager.IOUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import smarshare.coreservice.cache.model.FileToBeCached;
 
 import java.io.*;
@@ -13,7 +13,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 
 @Slf4j
-@Component
+@Service
 public class FileDirectoryManger {
 
     private String FileDirectory = "Cache/";
@@ -52,7 +52,7 @@ public class FileDirectoryManger {
         }
     }
 
-    public boolean deleteFileIfExistsInCache(Path CachedFilePath) {
+    private boolean deleteFileIfExistsInCache(Path CachedFilePath) {
         log.info( "Inside deleteFileIfExistsInCache" );
         try {
             return Files.deleteIfExists( CachedFilePath );
@@ -73,20 +73,20 @@ public class FileDirectoryManger {
         return deleteFileIfExistsInCache( getPathForGivenFileName( CachedFile.getFileName() ) );
     }
 
-    public String retrieveCachedFile(FileToBeCached CachedFile) {
+    public FileToBeCached retrieveCachedFile(String fileName) {
         log.info( "Inside retrieveCachedFile" );
         try {
-            Path completeFileNameWithDirectoryPath = getPathForGivenFileName( CachedFile.getFileName() );
+            Path completeFileNameWithDirectoryPath = getPathForGivenFileName( fileName );
 
             if (Files.exists( completeFileNameWithDirectoryPath )) {
                 byte[] contentInByteArray = IOUtils.readFully( completeFileNameWithDirectoryPath.toFile() );
-                return Base64.getEncoder().encodeToString( contentInByteArray );
+                return new FileToBeCached( fileName, Base64.getEncoder().encodeToString( contentInByteArray ) );
             }
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return "";
+        return null;
     }
 
 
