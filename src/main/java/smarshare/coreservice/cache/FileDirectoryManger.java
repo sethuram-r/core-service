@@ -68,9 +68,9 @@ public class FileDirectoryManger {
         return createFileInCache( fileToBeCached );
     }
 
-    public boolean deleteFileInCache(FileToBeCached CachedFile) {
+    public boolean deleteFileInCache(String CachedFile) {
         log.info( "Inside deleteFileInCache" );
-        return deleteFileIfExistsInCache( getPathForGivenFileName( CachedFile.getFileName() ) );
+        return deleteFileIfExistsInCache( getPathForGivenFileName( CachedFile ) );
     }
 
     public FileToBeCached retrieveCachedFile(String fileName) {

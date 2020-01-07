@@ -5,12 +5,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import smarshare.coreservice.cache.model.CacheManager;
 import smarshare.coreservice.read.dto.BucketMetadata;
 import smarshare.coreservice.read.model.Bucket;
 import smarshare.coreservice.read.model.S3DownloadObject;
 import smarshare.coreservice.read.model.S3DownloadedObject;
+import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
+import smarshare.coreservice.read.service.helper.CacheInsertionThread;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,14 +29,16 @@ public class ReadService {
     private List<Bucket> bucketList = null;
     private LockServerAPIService lockServerAPIService;
     private AccessManagementAPIService accessManagementAPIService;
+    private CacheManager cacheManager;
 
     @Autowired
-    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter,
+    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter, CacheManager cacheManager,
                 LockServerAPIService lockServerAPIService, AccessManagementAPIService accessManagementAPIService) {
         this.s3ReadService = s3ReadService;
         this.jsonConverter = jsonConverter;
         this.lockServerAPIService = lockServerAPIService;
         this.accessManagementAPIService = accessManagementAPIService;
+        this.cacheManager = cacheManager;
     }
 
     public List<Bucket> getBucketListFromS3() {
@@ -62,12 +68,28 @@ public class ReadService {
         return s3ReadService.listObjectsWithMetadata( userName, bucketName );
     }
 
+    private S3DownloadedObject getCachedObject(S3DownloadObject s3DownloadObject) {
+        try {
+            BASE64DecodedMultipartFile cachedS3DownloadedObject = cacheManager.getCachedObject( s3DownloadObject.getObjectName() );
+            if (null != cachedS3DownloadedObject)
+                return new S3DownloadedObject( s3DownloadObject, cachedS3DownloadedObject.getResource() );
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public S3DownloadedObject downloadFile(S3DownloadObject s3DownloadObject) {
         log.info( "Inside downloadFile" );
-        /* have to implement cache logic */
+
         try {
+            S3DownloadedObject cachedObject = getCachedObject( s3DownloadObject );
+            if (null != cachedObject) return cachedObject;
             // have to confirm whether object name matches with name in lock server
             if (lockServerAPIService.getLockStatusForGivenObject( s3DownloadObject.getObjectName() )) {
+                S3DownloadedObject s3DownloadedObject = s3ReadService.getObject( s3DownloadObject );
+                CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( s3DownloadObject, s3DownloadedObject );
+                cacheInsertionThread.thread.start();
                 return s3ReadService.getObject( s3DownloadObject );
             }
         } catch (Exception e) {
@@ -89,12 +111,17 @@ public class ReadService {
 
     public List<S3DownloadedObject> downloadFolder(List<S3DownloadObject> objectsToBeDownloaded) {
         log.info( "Inside downloadFolder" );
-        /* have to implement cache logic */
+
         try {
             if (!getLockStatusForTheObjectsToBeUploaded( objectsToBeDownloaded ).contains( Boolean.FALSE )) {
                 List<S3DownloadedObject> downloadedObjects = new ArrayList<>();
                 for (S3DownloadObject eachObjectToBeDownloaded : objectsToBeDownloaded) {
-                    downloadedObjects.add( s3ReadService.getObject( eachObjectToBeDownloaded ) );
+                    S3DownloadedObject cachedObject = getCachedObject( eachObjectToBeDownloaded );
+                    if (null != cachedObject) downloadedObjects.add( cachedObject );
+                    S3DownloadedObject s3DownloadedObject = s3ReadService.getObject( eachObjectToBeDownloaded );
+                    CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( eachObjectToBeDownloaded, s3DownloadedObject );
+                    cacheInsertionThread.thread.start();
+                    downloadedObjects.add( s3DownloadedObject );
                 }
                 return downloadedObjects;
             }

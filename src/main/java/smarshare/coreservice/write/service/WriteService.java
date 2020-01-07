@@ -9,7 +9,10 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.concurrent.ListenableFuture;
+import smarshare.coreservice.cache.model.CacheManager;
 import smarshare.coreservice.write.dto.BucketObjectForEvent;
+import smarshare.coreservice.write.helper.CacheDeleteThread;
+import smarshare.coreservice.write.helper.CacheUpdateThread;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.File;
 import smarshare.coreservice.write.model.FileToUpload;
@@ -29,15 +32,18 @@ public class WriteService {
     private KafkaTemplate<String, String> kafkaTemplate;
     private ObjectWriter jsonConverter;
     private S3WriteService s3WriteService;
+    private CacheManager cacheManager;
 
 
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Autowired
-    WriteService(KafkaTemplate<String, String> kafkaTemplate, ObjectWriter jsonConverter, S3WriteService s3WriteService) {
+    WriteService(KafkaTemplate<String, String> kafkaTemplate, ObjectWriter jsonConverter, CacheManager cacheManager,
+                 S3WriteService s3WriteService) {
         this.kafkaTemplate = kafkaTemplate;
         this.jsonConverter = jsonConverter;
         this.s3WriteService = s3WriteService;
+        this.cacheManager = cacheManager;
     }
 
     public Status createBucketInStorage(Bucket bucket) {
@@ -105,6 +111,15 @@ public class WriteService {
         return bucketObjectForDeleteEvent;
     }
 
+
+    private void deleteObjectInCache(String fileName) {
+        log.info( "Inside deleteObjectInCache" );
+        if (cacheManager.checkWhetherObjectExistInCache( fileName )) {
+            CacheDeleteThread cacheUpdateThread = new CacheDeleteThread( fileName );
+            cacheUpdateThread.thread.start();
+        }
+    }
+
     public Status deleteFileInStorage(File file, String bucketName) {
         log.info( "Inside deleteFileInStorage" );
         try {
@@ -115,6 +130,7 @@ public class WriteService {
                     List<BucketObjectForEvent> bucketObjectForDeleteEvents = new ArrayList<>();
                     bucketObjectForDeleteEvents.add( mapBucketObjectToBucketObjectEvent( file.getFileName(), bucketName ) );
                     kafkaTemplate.send( "AccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectForDeleteEvents ) );
+                    deleteObjectInCache( file.getFileName() );
                     return status;
                 }
             }
@@ -146,6 +162,7 @@ public class WriteService {
                 if (status.getMessage().equals( "Success" )) {
                     List<BucketObjectForEvent> bucketObjectsForDeleteEvent = folderObjects.stream().map( folderObject -> mapBucketObjectToBucketObjectEvent( folderObject, bucketName ) ).collect( Collectors.toList() );
                     kafkaTemplate.send( "AccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectsForDeleteEvent ) );
+                    folderObjects.forEach( this::deleteObjectInCache );
                     return status;
                 }
             }
@@ -191,6 +208,11 @@ public class WriteService {
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
                 filesToUpload.forEach( fileToUpload -> {
                     s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
+                    //update local cache.
+                    if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
+                        CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
+                        cacheUpdateThread.thread.start();
+                    }
                 } );
             }
             if (s3uploadResult.contains( Transfer.TransferState.Completed )) {
@@ -205,7 +227,6 @@ public class WriteService {
             log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
         }
 
-        //update local cache.
 
     }
 }

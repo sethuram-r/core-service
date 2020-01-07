@@ -6,8 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import smarshare.coreservice.cache.DescendingScoreComparator;
 import smarshare.coreservice.cache.FileDirectoryManger;
+import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
 
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -67,7 +71,12 @@ public class CacheManager {
 
     private Boolean refreshCacheContainer(List<CacheEntry> minimumGroupedCacheContainer, List cacheContainer) {
         log.info( "Inside routine execution plan" );
-        return cacheContainer.remove( minimumGroupedCacheContainer.get( 0 ) ) ? Boolean.TRUE : Boolean.FALSE;
+        CacheEntry cacheEntryToBeRemoved = minimumGroupedCacheContainer.get( 0 );
+        FileToBeCached correspondingFileOfCacheEntryToBeDeleted = cacheEntryToBeRemoved.getCacheInFileSystem();
+        if (cacheContainer.remove( cacheEntryToBeRemoved )) {
+            fileDirectoryManger.deleteFileInCache( correspondingFileOfCacheEntryToBeDeleted.getFileName() );
+            return Boolean.TRUE;
+        } else return Boolean.FALSE;
     }
 
     private Boolean cacheReplace() {
@@ -134,14 +143,14 @@ public class CacheManager {
         return false;
     }
 
-    public Boolean deletingCacheEntry(FileToBeCached cachedFileToBeDeleted) {
+    public Boolean deletingCacheEntry(String cachedFileToBeDeleted) {
 
         log.info( "Inside deletingCacheEntry " );
 
         //savepoint
         List<CacheEntry> cacheContainerSnapShotBeforeDelete = getCurrentStateOfContainer();
 
-        boolean removed = this.cacheContainer.removeIf( cacheEntry -> cacheEntry.getCacheInFileSystem().getFileName().equals( cachedFileToBeDeleted.getFileName() ) );
+        boolean removed = this.cacheContainer.removeIf( cacheEntry -> cacheEntry.getCacheInFileSystem().getFileName().equals( cachedFileToBeDeleted ) );
         if (removed) {
             boolean cacheRemoved = fileDirectoryManger.deleteFileInCache( cachedFileToBeDeleted );
             if (cacheRemoved) return true;
@@ -151,12 +160,22 @@ public class CacheManager {
     }
 
 
-    public FileToBeCached getCachedObject(String fileName) {
+    public BASE64DecodedMultipartFile getCachedObject(String fileName) throws UnsupportedEncodingException {
 
         log.info( "Inside getCachedObject" );
 
         FileToBeCached cachedFileToBeRetrieved = fileDirectoryManger.retrieveCachedFile( fileName );
-        if (null != cachedFileToBeRetrieved) incrementScoreOfCacheEntry( cachedFileToBeRetrieved );
-        return cachedFileToBeRetrieved;
+        byte[] cachedFileToBeRetrievedInByteArrayFormat = Base64.getDecoder().decode( cachedFileToBeRetrieved.getFileContentInBase64().getBytes( StandardCharsets.UTF_8 ) );
+        BASE64DecodedMultipartFile cachedObjectInMultipartFile = new BASE64DecodedMultipartFile( cachedFileToBeRetrievedInByteArrayFormat );
+
+        if (null != cachedFileToBeRetrieved) {
+            incrementScoreOfCacheEntry( cachedFileToBeRetrieved );
+        }
+        return cachedObjectInMultipartFile;
+    }
+
+    public Boolean checkWhetherObjectExistInCache(String fileName) {
+        log.info( "Inside checkWhetherObjectExistInCache" );
+        return this.cacheContainer.stream().anyMatch( cacheEntry -> cacheEntry.getCacheInFileSystem().getFileName().equals( fileName ) );
     }
 }
