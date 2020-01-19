@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.util.concurrent.ListenableFuture;
 import smarshare.coreservice.cache.model.CacheManager;
@@ -22,18 +23,17 @@ import smarshare.coreservice.write.model.lock.S3ObjectsWrapper;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@Component
 public class WriteService {
 
     private KafkaTemplate<String, String> kafkaTemplate;
     private ObjectWriter jsonConverter;
     private S3WriteService s3WriteService;
     private CacheManager cacheManager;
-
 
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -175,58 +175,86 @@ public class WriteService {
         return null;
     }
 
-    private ListenableFuture<SendResult<String, String>> lockTheGivenObjects(List<FileToUpload> filesToUpload) {
-        List<S3Object> objectsToBeLocked = new ArrayList<>();
-        try {
-            filesToUpload.forEach( fileToUpload -> {
-                objectsToBeLocked.add( new S3Object( fileToUpload.getUploadedFileName(), Boolean.TRUE ) );
-            } );
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "objects", jsonConverter.writeValueAsString( new S3ObjectsWrapper( objectsToBeLocked ) ) );
-            return producerResult;
-        } catch (JsonProcessingException e) {
-            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
-        }
-        return null;
+    public List<Status> deleteObjectsForSagaFromS3(List<FileToUpload> objectsTobeDeleted) {
+
+        log.info( "inside deleteObjectsForSagaFromS3 " );
+
+        return objectsTobeDeleted.stream()
+                .map( objectToDelete -> {
+                    deleteObjectInCache( objectToDelete.getUploadedFileName() );
+                    return s3WriteService.deleteObject( objectToDelete.getUploadedFileName(), objectToDelete.getBucketName() );
+                } ).collect( Collectors.toList() );
+
     }
 
-    private BucketObjectForEvent mappingUploadObjectToBucketObjectEvent(FileToUpload fileToUpload) {
-        BucketObjectForEvent bucketObjectForEvent = new BucketObjectForEvent();
-        bucketObjectForEvent.setBucketName( fileToUpload.getBucketName() );
-        bucketObjectForEvent.setObjectName( fileToUpload.getUploadedFileName() );
-        bucketObjectForEvent.setOwnerName( fileToUpload.getOwnerOfTheFile() );
-        bucketObjectForEvent.setUserName( fileToUpload.getOwnerOfTheFile() );
-        return bucketObjectForEvent;
-    }
+//    private ListenableFuture<SendResult<String, String>> lockTheGivenObjects(List<FileToUpload> filesToUpload) {
+//        List<S3Object> objectsToBeLocked = new ArrayList<>();
+//        try {
+//            filesToUpload.forEach( fileToUpload -> {
+//                objectsToBeLocked.add( new S3Object( fileToUpload.getUploadedFileName(), Boolean.TRUE ) );
+//            } );
+//            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "objects", jsonConverter.writeValueAsString( new S3ObjectsWrapper( objectsToBeLocked ) ) );
+//            return producerResult;
+//        } catch (JsonProcessingException e) {
+//            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
+//        }
+//        return null;
+//    }
 
-    // Have to implement distributed transactions in future
+//    private BucketObjectForEvent mappingUploadObjectToBucketObjectEvent(FileToUpload fileToUpload) {
+//        BucketObjectForEvent bucketObjectForEvent = new BucketObjectForEvent();
+//        bucketObjectForEvent.setBucketName( fileToUpload.getBucketName() );
+//        bucketObjectForEvent.setObjectName( fileToUpload.getUploadedFileName() );
+//        bucketObjectForEvent.setOwnerName( fileToUpload.getOwnerOfTheFile() );
+//        bucketObjectForEvent.setUserName( fileToUpload.getOwnerOfTheFile() );
+//        return bucketObjectForEvent;
+//    }
 
-    public void uploadObjectToS3(List<FileToUpload> filesToUpload) {
+
+    public List<Transfer.TransferState> uploadObjectToS3(List<FileToUpload> filesToUpload) {
         log.info( "inside uploadObjectToS3 " );
-        try {
-            List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
-            ListenableFuture<SendResult<String, String>> producerResult = lockTheGivenObjects( filesToUpload );
-            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
-                filesToUpload.forEach( fileToUpload -> {
-                    s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
-                    //update local cache.
-                    if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
-                        CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
-                        cacheUpdateThread.thread.start();
-                    }
-                } );
+        List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
+        filesToUpload.forEach( fileToUpload -> {
+            s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
+            //update local cache.
+            if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
+                CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
+                cacheUpdateThread.thread.start();
             }
-            if (s3uploadResult.contains( Transfer.TransferState.Completed )) {
-                List<BucketObjectForEvent> uploadObjectEvents = filesToUpload.stream().map( this::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
-                try {
-                    kafkaTemplate.send( "AccessManagement", "uploadBucketObjects", jsonConverter.writeValueAsString( uploadObjectEvents ) );
-                } catch (JsonProcessingException e) {
-                    log.error( "Exception while publishing createEmptyFolder event " + e.getMessage() );
-                }
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
-        }
-
-
+        } );
+        return s3uploadResult;
     }
+
+
+//    // Have to implement distributed transactions in future
+//
+//    public void uploadObjectToS3(List<FileToUpload> filesToUpload) {
+//        log.info( "inside uploadObjectToS3 " );
+////        try {
+//            List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
+////            ListenableFuture<SendResult<String, String>> producerResult = lockTheGivenObjects( filesToUpload );
+////            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
+//                filesToUpload.forEach( fileToUpload -> {
+//                    s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
+//                    //update local cache.
+//                    if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
+//                        CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
+//                        cacheUpdateThread.thread.start();
+//                    }
+//                } );
+////            }
+//            if (s3uploadResult.contains( Transfer.TransferState.Completed )) {
+//                List<BucketObjectForEvent> uploadObjectEvents = filesToUpload.stream().map( this::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
+//                try {
+//                    kafkaTemplate.send( "AccessManagement", "uploadBucketObjects", jsonConverter.writeValueAsString( uploadObjectEvents ) );
+//                } catch (JsonProcessingException e) {
+//                    log.error( "Exception while publishing createEmptyFolder event " + e.getMessage() );
+//                }
+//            }
+////        } catch (InterruptedException | ExecutionException e) {
+////            log.error( " Exception while publishing lock to Kafka " + e.getCause() + e.getMessage() );
+////        }
+//
+//
+//    }
 }

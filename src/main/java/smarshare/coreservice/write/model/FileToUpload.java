@@ -21,6 +21,16 @@ public class FileToUpload {
         return uploadedFileContent;
     }
 
+    public FileToUpload setUploadedFileName(String uploadedFileName) {
+        this.uploadedFileName = uploadedFileName;
+        return this;
+    }
+
+    public FileToUpload setBucketName(String bucketName) {
+        this.bucketName = bucketName;
+        return this;
+    }
+
     public AccessInfo getDefaultAccessInfo() {
         return defaultAccessInfo;
     }

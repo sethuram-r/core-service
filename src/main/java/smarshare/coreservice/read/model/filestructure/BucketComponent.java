@@ -3,10 +3,12 @@ package smarshare.coreservice.read.model.filestructure;
 
 public abstract class BucketComponent {
 
+
     String name;
     String owner;
     AccessInfo accessInfo;
     String completeName;
+    String lastModified;
 
     public String getName() {
         return name;
