@@ -14,6 +14,7 @@ import smarshare.coreservice.cache.model.CacheManager;
 import smarshare.coreservice.write.dto.BucketObjectForEvent;
 import smarshare.coreservice.write.helper.CacheDeleteThread;
 import smarshare.coreservice.write.helper.CacheUpdateThread;
+import smarshare.coreservice.write.helper.SagaOrchestratorThread;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.File;
 import smarshare.coreservice.write.model.FileToUpload;
@@ -187,6 +188,49 @@ public class WriteService {
 
     }
 
+    public List<Transfer.TransferState> uploadObjectToS3(List<FileToUpload> filesToUpload) {
+        log.info( "inside uploadObjectToS3 " );
+        List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
+        filesToUpload.forEach( fileToUpload -> {
+            s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
+            //update local cache.
+            if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
+                CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
+                cacheUpdateThread.thread.start();
+            }
+        } );
+        return s3uploadResult;
+    }
+
+
+    public Boolean UploadObjectThroughSaga(List<FileToUpload> filesToUpload) {
+        log.info( "inside UploadObjectThroughSaga " );
+
+        try {
+            SagaOrchestratorThread sagaOrchestratorThread = new SagaOrchestratorThread( filesToUpload );
+            sagaOrchestratorThread.thread.start();
+            return true;
+        } catch (Exception e) {
+            log.error( "Exception while starting Saga Upload Orchestrator Thread " + e );
+        }
+        return false;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //    private ListenableFuture<SendResult<String, String>> lockTheGivenObjects(List<FileToUpload> filesToUpload) {
 //        List<S3Object> objectsToBeLocked = new ArrayList<>();
 //        try {
@@ -209,21 +253,6 @@ public class WriteService {
 //        bucketObjectForEvent.setUserName( fileToUpload.getOwnerOfTheFile() );
 //        return bucketObjectForEvent;
 //    }
-
-
-    public List<Transfer.TransferState> uploadObjectToS3(List<FileToUpload> filesToUpload) {
-        log.info( "inside uploadObjectToS3 " );
-        List<Transfer.TransferState> s3uploadResult = new ArrayList<>();
-        filesToUpload.forEach( fileToUpload -> {
-            s3uploadResult.add( s3WriteService.uploadObject( fileToUpload ) ); // uploading tos3
-            //update local cache.
-            if (cacheManager.checkWhetherObjectExistInCache( fileToUpload.getUploadedFileName() )) {
-                CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( fileToUpload );
-                cacheUpdateThread.thread.start();
-            }
-        } );
-        return s3uploadResult;
-    }
 
 
 //    // Have to implement distributed transactions in future

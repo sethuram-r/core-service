@@ -68,10 +68,9 @@ public class WriteController {
 
 
     @PostMapping(value = "object")
-    public void uploadObject(@RequestBody FileToUpload[] filesToUpload) {
+    public Boolean uploadObject(@RequestBody FileToUpload[] filesToUpload) {
         log.info( "Inside uploadFile " );
-        // have to spin up a new thread so that its doesn't create a non blocking scenario.
-        writeService.uploadObjectToS3( Arrays.asList( filesToUpload ) );
+        return writeService.UploadObjectThroughSaga( Arrays.asList( filesToUpload ) );
     }
 
 

@@ -1,10 +1,8 @@
 package smarshare.coreservice.write.sagas.upload;
 
-import smarshare.coreservice.write.model.FileToUpload;
-
-import java.util.List;
+import smarshare.coreservice.write.sagas.dto.SagaEventWrapper;
 
 @FunctionalInterface
 public interface UploadOperationsOnObjects {
-    Object apply(List<FileToUpload> filesToUpload);
+    Boolean apply(SagaEventWrapper taskInput);
 }
