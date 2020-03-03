@@ -1,22 +1,40 @@
 package smarshare.coreservice.cache;
 
-import com.oracle.tools.packager.IOUtils;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.cache.model.FileToBeCached;
 
+import javax.annotation.PostConstruct;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Base64;
+import java.util.Comparator;
 
 @Slf4j
 @Service
 public class FileDirectoryManger {
 
     private String FileDirectory = "Cache/";
+
+    @PostConstruct
+    private void instantiateCacheStorage() {
+        log.info( "Initializing Cache Storage" );
+        try {
+
+            if (Files.exists( Paths.get( "Cache/" ) )) {
+                Files.walk( Paths.get( "Cache/" ) )
+                        .sorted( Comparator.reverseOrder() )
+                        .map( Path::toFile )
+                        .forEach( File::delete );
+            }
+        } catch (IOException e) {
+            log.error( "Error While instantiateCacheStorage " + e );
+        }
+    }
 
     private InputStream getBase64DecodedFileContent(String base64EncodedContent) {
         log.info( "Inside getBase64DecodedFileContent method " );
@@ -37,8 +55,9 @@ public class FileDirectoryManger {
             OutputStream cachedFile = new BufferedOutputStream( Files.newOutputStream( completeFileNameWithDirectoryPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE ) );
             int currentPosition;
             int endPositionOfFile = -1;
+            InputStream base64DecodedContent = getBase64DecodedFileContent( fileToBeCached.getFileContentInBase64() );
             do {
-                currentPosition = getBase64DecodedFileContent( fileToBeCached.getFileContentInBase64() ).read();
+                currentPosition = base64DecodedContent.read();
                 if (currentPosition != endPositionOfFile) {
                     cachedFile.write( (char) currentPosition );
                 }
@@ -79,7 +98,7 @@ public class FileDirectoryManger {
             Path completeFileNameWithDirectoryPath = getPathForGivenFileName( fileName );
 
             if (Files.exists( completeFileNameWithDirectoryPath )) {
-                byte[] contentInByteArray = IOUtils.readFully( completeFileNameWithDirectoryPath.toFile() );
+                byte[] contentInByteArray = Files.readAllBytes( completeFileNameWithDirectoryPath.toFile().toPath() );
                 return new FileToBeCached( fileName, Base64.getEncoder().encodeToString( contentInByteArray ) );
             }
 

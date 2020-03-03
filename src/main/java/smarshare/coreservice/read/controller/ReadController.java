@@ -8,12 +8,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import smarshare.coreservice.read.model.Bucket;
-import smarshare.coreservice.read.model.S3DownloadObject;
-import smarshare.coreservice.read.model.S3DownloadedObject;
+import smarshare.coreservice.read.dto.DownloadFolderRequest;
 import smarshare.coreservice.read.service.ReadService;
-
-import java.util.List;
 
 
 @Slf4j
@@ -29,36 +25,34 @@ public class ReadController {
         this.readService = readService;
     }
 
-    @GetMapping(value = "buckets") /// have to replace with another method specific for user
-    public List<Bucket> getBucketList(){
+    @GetMapping(value = "buckets/{userName}")
+    public ResponseEntity getBucketList(@PathVariable String userName) {
         log.info( "Inside getBucketList" );
-        return readService.getBucketListFromS3();
+        return ResponseEntity.ok().body( readService.getBucketsByUserName( userName ) );
     }
 
     @GetMapping(value = "objects")
     public String listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userName") String userName, @RequestParam("bucketName") String bucketName) {
         log.info( "Inside listFilesAndFoldersForIndividualUserForParticularBucket" );
-        return readService.getFilesAndFoldersListByUserAndBucket( userName, bucketName );
+        return readService.getFilesAndFoldersByUserNameAndBucketName( userName, bucketName );
     }
 
     @GetMapping(value = "file/download")
-    // public ResponseEntity<Resource> getFileForIndividualUserForParticularBucket(@RequestParam String objectName, @RequestParam(defaultValue = "motivation.pdf") String fileName, @RequestParam(defaultValue = "file.server.1") String bucketName) {
-    public ResponseEntity<Resource> getFileForIndividualUserForParticularBucket(@RequestParam("object") S3DownloadObject S3DownloadObject) { // have to pass object in this format from ui
-        log.info( "Inside getFileForIndividualUserForParticularBucket" );
+    public ResponseEntity<Resource> getFileByObjectNameAndBucketName(
+            @RequestParam("fileName") String fileName,
+            @RequestParam("objectName") String objectName,
+            @RequestParam("bucketName") String bucketName
+    ) {
+        log.info( "Inside getFileByObjectNameAndBucketName" );
         return ResponseEntity.ok()
                 .contentType( MediaType.parseMediaType( "application/octet-stream" ) )
-                .header( HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + S3DownloadObject.getFileName() + "\"" )
-                .body( readService.downloadFile( S3DownloadObject ).getDownloadedObjectResource() );
+                .header( HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"" )
+                .body( readService.downloadFile( objectName, bucketName ).getDownloadedObjectResource() );
     }
 
-    @GetMapping(value = "folder/download")
-    public ResponseEntity<List<S3DownloadedObject>> getFolderForIndividualUserForParticularBucket(@RequestParam("objects") List<S3DownloadObject> objectsToBeDownloaded) {
+    @PostMapping(value = "folder/download") // pass only files
+    public ResponseEntity getFolderForIndividualUserForParticularBucket(@RequestBody DownloadFolderRequest objectsToBeDownloaded) {
         log.info( "Inside getFolderForIndividualUserForParticularBucket" );
-        // Stub
-//        Map<String, Map<String, String>> fileNameWrapper = new HashMap<>();
-//        Map<String, String> s3ObjectDownloadInfo = new HashMap<>();
-//        s3ObjectDownloadInfo.put( "motivation.pdf", "file.server.1" );
-//        fileNameWrapper.put( "motivation.pdf", s3ObjectDownloadInfo );
         return ResponseEntity.ok().body( readService.downloadFolder( objectsToBeDownloaded ) );
     }
 

@@ -2,13 +2,16 @@ package smarshare.coreservice.write.sagas.dto;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
 import smarshare.coreservice.write.model.lock.S3Object;
 
 import java.util.List;
 
-public class SagaEventLockWrapper {
+public @Data
+class SagaEventLockWrapper {
     private String eventId;
     private List<S3Object> objects;
+    private String status = "In process";
 
 
     @JsonCreator
@@ -18,19 +21,5 @@ public class SagaEventLockWrapper {
         this.objects = objects;
     }
 
-    public String getEventId() {
-        return eventId;
-    }
 
-    public List<S3Object> getObjects() {
-        return objects;
-    }
-
-    @Override
-    public String toString() {
-        return "SagaEventLockWrapper{" +
-                "eventId='" + eventId + '\'' +
-                ", objects=" + objects +
-                '}';
-    }
 }

@@ -25,4 +25,8 @@ public abstract class BucketComponent {
     public String getCompleteName() {
         return completeName;
     }
+
+    public String getLastModified() {
+        return lastModified;
+    }
 }

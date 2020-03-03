@@ -7,9 +7,7 @@ import smarshare.coreservice.read.model.filestructure.AccessInfo;
 import smarshare.coreservice.read.model.filestructure.FileComponent;
 import smarshare.coreservice.read.model.filestructure.FolderComponent;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Pattern;
 
 
@@ -20,53 +18,54 @@ public class BucketObjectsHelper {
     private Pattern fileExtensionRegex = Pattern.compile( "(.*)([a-zA-Z0-9\\s_\\\\.\\-\\(\\):])+(\\..*)$" );
 
 
-    private FolderComponent fileStructureConverter(List<String> extractedKeys, String bucketName, List<Map<String, ObjectMetadata>> objectMetadata) {
+    private FolderComponent fileStructureConverter(Map<String, String> extractedKeys, String bucketName, Map<String, ObjectMetadata> objectMetadata) {
         log.info( "Inside fileStructureConverter" );
 
         // Forming the root node
-        AccessInfo currentKeyAccessInfo = null;
-        String owner = "";
-        FolderComponent root = new FolderComponent( bucketName, currentKeyAccessInfo, owner, "/" );
+
+        FolderComponent root = new FolderComponent( bucketName, null, "", "/" );
         FolderComponent previousFolder = root;
-        for (String extractedKey : extractedKeys) {
+        for (Map.Entry<String, String> extractedKey : extractedKeys.entrySet()) {
+
+            AccessInfo currentKeyAccessInfo = null;
+            String owner = "";
 
             // fetching access details needed for forming the tree
-            Optional<Map<String, ObjectMetadata>> objectMetadataForGivenKey =
-                    objectMetadata.stream().filter( stringObjectMetadataMap -> stringObjectMetadataMap.containsKey( extractedKey ) )
-                            .findFirst();
-            if (objectMetadataForGivenKey.isPresent()) {
-                ObjectMetadata currentObjectMetadata = objectMetadataForGivenKey.get().get( extractedKey );
+
+            if (objectMetadata.containsKey( extractedKey.getKey() )) {
+                ObjectMetadata currentObjectMetadata = objectMetadata.get( extractedKey.getKey() );
                 if (null != currentObjectMetadata.getAccessingUserInfo())
                     currentKeyAccessInfo = new AccessInfo( currentObjectMetadata.getAccessingUserInfo() );
                 owner = currentObjectMetadata.getOwnerName();
             }
+
             // file in root folder
-            if (fileExtensionRegex.matcher( extractedKey ).matches() && (!extractedKey.contains( "/" ))) {
-                root.add( new FileComponent( extractedKey, currentKeyAccessInfo, owner, extractedKey ) );
+            if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches() && (!extractedKey.getKey().contains( "/" ))) {
+                root.add( new FileComponent( extractedKey.getKey(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
             }
 
             //only folders and files within folders are allowed
-            if (extractedKey.endsWith( "/" ) || fileExtensionRegex.matcher( extractedKey ).matches()) {
+            if (extractedKey.getKey().endsWith( "/" ) || fileExtensionRegex.matcher( extractedKey.getKey() ).matches()) {
 
                 //first level of folder
-                if (extractedKey.endsWith( "/" ) && (previousFolder.getName().equals( bucketName ) || !extractedKey.contains( previousFolder.getName() + "/" ))) {
-                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey ) );
+                if (extractedKey.getKey().endsWith( "/" ) && (previousFolder.getName().equals( bucketName ) || !extractedKey.getKey().contains( previousFolder.getName() + "/" ))) {
+                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.getKey().replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey() ) );
                 } else // sub level in folders
-                    if (extractedKey.endsWith( "/" ) && extractedKey.contains( previousFolder.getName() + "/" )) {
-                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey ) );
+                    if (extractedKey.getKey().endsWith( "/" ) && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
+                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey() ) );
                     } else //file in sub level folders
-                        if (fileExtensionRegex.matcher( extractedKey ).matches() && extractedKey.contains( previousFolder.getName() + "/" )) {
-                            previousFolder.add( new FileComponent( extractedKey.replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey ) );
+                        if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches() && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
+                            previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
                         }
             } else {
                 //file without extensions
-                previousFolder.add( new FileComponent( extractedKey.replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey ) );
+                previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
             }
         }
         return root;
     }
 
-    public FolderComponent convertKeysInFileStructureFormat(List<String> extractedKeys, String bucketName, List<Map<String, ObjectMetadata>> objectMetadata) {
+    public FolderComponent convertKeysInFileStructureFormat(Map<String, String> extractedKeys, String bucketName, Map<String, ObjectMetadata> objectMetadata) {
         log.info( "Inside convertKeysInFileStructureFormat" );
         return fileStructureConverter( extractedKeys, bucketName, objectMetadata );
     }

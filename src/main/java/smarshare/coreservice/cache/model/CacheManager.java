@@ -6,12 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import smarshare.coreservice.cache.DescendingScoreComparator;
 import smarshare.coreservice.cache.FileDirectoryManger;
-import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
 
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -160,18 +156,16 @@ public class CacheManager {
     }
 
 
-    public BASE64DecodedMultipartFile getCachedObject(String fileName) throws UnsupportedEncodingException {
+    public FileToBeCached getCachedObject(String fileName) {
 
         log.info( "Inside getCachedObject" );
 
         FileToBeCached cachedFileToBeRetrieved = fileDirectoryManger.retrieveCachedFile( fileName );
-        byte[] cachedFileToBeRetrievedInByteArrayFormat = Base64.getDecoder().decode( cachedFileToBeRetrieved.getFileContentInBase64().getBytes( StandardCharsets.UTF_8 ) );
-        BASE64DecodedMultipartFile cachedObjectInMultipartFile = new BASE64DecodedMultipartFile( cachedFileToBeRetrievedInByteArrayFormat );
-
         if (null != cachedFileToBeRetrieved) {
             incrementScoreOfCacheEntry( cachedFileToBeRetrieved );
+            return cachedFileToBeRetrieved;
         }
-        return cachedObjectInMultipartFile;
+        return null;
     }
 
     public Boolean checkWhetherObjectExistInCache(String fileName) {

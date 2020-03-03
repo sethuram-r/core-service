@@ -1,24 +1,28 @@
 package smarshare.coreservice.read.service;
 
+import com.amazonaws.services.s3.model.S3Object;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.cache.model.CacheManager;
-import smarshare.coreservice.read.dto.BucketMetadata;
+import smarshare.coreservice.cache.model.DownloadedCacheObject;
+import smarshare.coreservice.cache.model.FileToBeCached;
+import smarshare.coreservice.read.dto.*;
 import smarshare.coreservice.read.model.Bucket;
-import smarshare.coreservice.read.model.S3DownloadObject;
-import smarshare.coreservice.read.model.S3DownloadedObject;
 import smarshare.coreservice.read.model.filestructure.BASE64DecodedMultipartFile;
 import smarshare.coreservice.read.service.helper.CacheInsertionThread;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -31,6 +35,7 @@ public class ReadService {
     private AccessManagementAPIService accessManagementAPIService;
     private CacheManager cacheManager;
 
+
     @Autowired
     ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter, CacheManager cacheManager,
                 LockServerAPIService lockServerAPIService, AccessManagementAPIService accessManagementAPIService) {
@@ -39,58 +44,68 @@ public class ReadService {
         this.lockServerAPIService = lockServerAPIService;
         this.accessManagementAPIService = accessManagementAPIService;
         this.cacheManager = cacheManager;
+
     }
 
-    public List<Bucket> getBucketListFromS3() {
+    private List<Bucket> getBucketListFromS3() {
         log.info( "Inside getBucketListFromS3" );
         if (bucketList == null){
-            bucketList = s3ReadService.listBuckets();
+            return s3ReadService.listBuckets();
         }
         return bucketList;
     }
 
-    // have to be used from controller
-    public List<Bucket> getBucketListFromSpecificUser(String userName) {
+    public List<Bucket> getBucketsByUserName(String userName) {
         log.info( "Inside getBucketListFromSpecificUser" );
         List<Bucket> bucketsInS3 = getBucketListFromS3();
-        List<Map<String, BucketMetadata>> bucketsMetadata = accessManagementAPIService.fetchAccessDetailsForBuckets( userName );
-        for (Bucket eachBucket : bucketsInS3) {
-            Optional<Map<String, BucketMetadata>> bucketMetadata = bucketsMetadata.stream().filter( stringBucketMetadataMap -> stringBucketMetadataMap.containsKey( eachBucket.getName() ) ).findFirst();
-            bucketMetadata.ifPresent( stringBucketMetadataMap -> eachBucket.setBucketMetadata( stringBucketMetadataMap.get( eachBucket.getName() ) ) );
+        Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserName( userName ).stream()
+                .collect( Collectors.toMap( BucketMetadata::getBucketName, Function.identity() ) );
+        if (!bucketsInS3.isEmpty() && !bucketsMetadata.isEmpty()) {
+            bucketsInS3.forEach( bucket -> bucket.setAccess( bucketsMetadata.get( bucket.getName() ) ) );
         }
-        System.out.println( "bucketswithAccess ------>" + bucketsInS3 );
+//        System.out.println("bucketsInS3----->"+bucketsInS3 );
+//        System.out.println("bucketsMetadata----->"+bucketsMetadata );
+//        System.out.println( "Buckets with Access ------>" + bucketsInS3 );
         return bucketsInS3;
     }
 
 
-    public String getFilesAndFoldersListByUserAndBucket(String userName, String bucketName) {
+    public String getFilesAndFoldersByUserNameAndBucketName(String userName, String bucketName) {
         log.info( "Inside getFilesAndFoldersByUserAndBucket" );
         return s3ReadService.listObjectsWithMetadata( userName, bucketName );
     }
 
-    private S3DownloadedObject getCachedObject(S3DownloadObject s3DownloadObject) {
-        try {
-            BASE64DecodedMultipartFile cachedS3DownloadedObject = cacheManager.getCachedObject( s3DownloadObject.getObjectName() );
-            if (null != cachedS3DownloadedObject)
-                return new S3DownloadedObject( s3DownloadObject, cachedS3DownloadedObject.getResource() );
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
-        return null;
+    private FileToBeCached getCachedObject(String objectName, String bucketName) {
+        return cacheManager.getCachedObject( bucketName + "/" + objectName );
     }
 
-    public S3DownloadedObject downloadFile(S3DownloadObject s3DownloadObject) {
+    private BASE64DecodedMultipartFile convertCachedFileToBASE64DecodedMultipartFile(FileToBeCached cachedObject) {
+        byte[] cachedFileToBeRetrievedInByteArrayFormat = Base64.getDecoder().decode( cachedObject.getFileContentInBase64().getBytes( StandardCharsets.UTF_8 ) );
+        return new BASE64DecodedMultipartFile( cachedFileToBeRetrievedInByteArrayFormat );
+    }
+
+    private BASE64DecodedMultipartFile convertRawS3ObjectIntoBase64(S3Object s3Object) throws IOException {
+        byte[] downloadedObjectInByteArrayFormat = ByteStreams.toByteArray( s3Object.getObjectContent() );
+        return new BASE64DecodedMultipartFile( downloadedObjectInByteArrayFormat );
+    }
+
+    public S3DownloadedObject downloadFile(String objectName, String bucketName) {
         log.info( "Inside downloadFile" );
 
         try {
-            S3DownloadedObject cachedObject = getCachedObject( s3DownloadObject );
-            if (null != cachedObject) return cachedObject;
-            // have to confirm whether object name matches with name in lock server
-            if (lockServerAPIService.getLockStatusForGivenObject( s3DownloadObject.getObjectName() )) {
-                S3DownloadedObject s3DownloadedObject = s3ReadService.getObject( s3DownloadObject );
-                CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( s3DownloadObject, s3DownloadedObject );
-                cacheInsertionThread.thread.start();
-                return s3ReadService.getObject( s3DownloadObject );
+            FileToBeCached cachedObject = getCachedObject( objectName, bucketName );
+            if (null != cachedObject) {
+                return new S3DownloadedObject( objectName, bucketName, convertCachedFileToBASE64DecodedMultipartFile( cachedObject ).getResource() );
+            } else {
+                log.info( "Requested Resource Doesn't Exist in Cache" );
+                if (!lockServerAPIService.getLockStatusForGivenObject( objectName )) {
+                    BASE64DecodedMultipartFile downloadedObjectInMultipartFile = convertRawS3ObjectIntoBase64( Objects.requireNonNull( s3ReadService.getObject( objectName, bucketName ) ) );
+                    S3DownloadedObject s3DownloadedObject = new S3DownloadedObject( objectName, bucketName, downloadedObjectInMultipartFile.getResource() );
+                    CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( cacheManager, new DownloadedCacheObject( objectName, bucketName, Objects.requireNonNull( downloadedObjectInMultipartFile ) ) );
+                    cacheInsertionThread.thread.start();
+
+                    return s3DownloadedObject;
+                }
             }
         } catch (Exception e) {
             log.error( "Exception while downloading the file" + e.getMessage() + e.getCause() );
@@ -98,44 +113,46 @@ public class ReadService {
         return null;
     }
 
-    private List<Boolean> getLockStatusForTheObjectsToBeUploaded(List<S3DownloadObject> objectsToBeDownloaded) {
-        log.info( "Inside getLockStatusForTheObjectsToBeUploaded" );
-        List<String> objectNames = new ArrayList<>();
-        if (!objectsToBeDownloaded.isEmpty()) {
-            objectsToBeDownloaded.forEach( s3DownloadObject -> {
-                objectNames.add( s3DownloadObject.getObjectName() );
-            } );
-        }
-        return lockServerAPIService.getLockStatusForGivenObjects( objectNames );
-    }
 
-    public List<S3DownloadedObject> downloadFolder(List<S3DownloadObject> objectsToBeDownloaded) {
-        log.info( "Inside downloadFolder" );
-
+    private DownloadedObject downloadFileInBase64(S3DownloadObject s3DownloadObject) {
         try {
-            if (!getLockStatusForTheObjectsToBeUploaded( objectsToBeDownloaded ).contains( Boolean.FALSE )) {
-                List<S3DownloadedObject> downloadedObjects = new ArrayList<>();
-                for (S3DownloadObject eachObjectToBeDownloaded : objectsToBeDownloaded) {
-                    S3DownloadedObject cachedObject = getCachedObject( eachObjectToBeDownloaded );
-                    if (null != cachedObject) downloadedObjects.add( cachedObject );
-                    S3DownloadedObject s3DownloadedObject = s3ReadService.getObject( eachObjectToBeDownloaded );
-                    CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( eachObjectToBeDownloaded, s3DownloadedObject );
-                    cacheInsertionThread.thread.start();
-                    downloadedObjects.add( s3DownloadedObject );
-                }
-                return downloadedObjects;
+            FileToBeCached cachedObject = getCachedObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName() );
+            if (null != cachedObject) {
+                return new DownloadedObject( s3DownloadObject.getFileName(), s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), cachedObject.getFileContentInBase64() );
+            } else {
+                S3Object s3Object = (Objects.requireNonNull( s3ReadService.getObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName() ) ));
+                byte[] contentBytes = s3Object.getObjectContent().readAllBytes();
+                s3Object.getObjectContent().close();
+                CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( cacheManager, new DownloadedCacheObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), new BASE64DecodedMultipartFile( contentBytes ) ) );
+                cacheInsertionThread.thread.start();
+                return new DownloadedObject( s3DownloadObject.getFileName(), s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), Base64.getEncoder().encodeToString( contentBytes ) );
             }
         } catch (Exception e) {
-            log.error( "Exception while downloading the folder" + e.getMessage() + e.getCause() );
+            log.error( "Exception while downloading the file in base64" + e.getMessage() + e.getCause() );
         }
-
         return null;
     }
 
+
+    public List<DownloadedObject> downloadFolder(DownloadFolderRequest objectsToBeDownloaded) {
+        log.info( "Inside downloadFolder" );
+        try {
+            if (!lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() )) {
+                return objectsToBeDownloaded.getObjectsToBeDownloaded().stream()
+//                        .filter( s3DownloadObject -> !s3DownloadObject.getObjectName().endsWith( "/" ) ) not needed
+                        .map( s3DownloadObject -> Objects.requireNonNull( downloadFileInBase64( s3DownloadObject ) ) )
+                        .collect( Collectors.toList() );
+            }
+        } catch (Exception e) {
+
+        }
+        return null;
+    }
+
+
     //    @KafkaListener(groupId="readConsumer",topics = "read")
     public void consume(String bucketToBeUpdatedOrDeletedInInternalCache, ConsumerRecord record) throws IOException {
-        System.out.println( "bucketToBeUpdatedInInternalCache------------->" + bucketToBeUpdatedOrDeletedInInternalCache );
-        System.out.println( "record--------->" + record );
+
 
         if (record.key() == ("add")) {
             log.info( "Consumed Cache add Event" );

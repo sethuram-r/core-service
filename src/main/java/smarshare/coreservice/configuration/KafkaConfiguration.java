@@ -16,7 +16,7 @@ import java.util.Map;
 
 @EnableKafka
 @Configuration
-public class KafkaConsumerConfiguration {
+public class KafkaConfiguration {
 
 
     @Bean
@@ -26,8 +26,6 @@ public class KafkaConsumerConfiguration {
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 "127.0.0.1:9092" );
 
-        props.put( ConsumerConfig.GROUP_ID_CONFIG,
-                "sagaConsumer" );
         props.put(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                 StringDeserializer.class );

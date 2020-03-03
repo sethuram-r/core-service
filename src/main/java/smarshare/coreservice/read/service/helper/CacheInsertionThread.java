@@ -1,43 +1,40 @@
 package smarshare.coreservice.read.service.helper;
 
-import com.oracle.tools.packager.IOUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import smarshare.coreservice.cache.model.CacheManager;
-import smarshare.coreservice.cache.model.FileToBeCached;
-import smarshare.coreservice.read.model.S3DownloadObject;
-import smarshare.coreservice.read.model.S3DownloadedObject;
 
-import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+import smarshare.coreservice.cache.model.CacheManager;
+import smarshare.coreservice.cache.model.DownloadedCacheObject;
+import smarshare.coreservice.cache.model.FileToBeCached;
+
 import java.util.Base64;
 
 @Slf4j
 public class CacheInsertionThread implements Runnable {
 
     public Thread thread;
-    @Autowired
-    CacheManager cacheManager;
-    private S3DownloadObject objectToBeCached;
-    private S3DownloadedObject s3DownloadedObject;
 
-    public CacheInsertionThread(S3DownloadObject s3DownloadObject, S3DownloadedObject s3DownloadedObject) {
+
+    CacheManager cacheManager;
+    private DownloadedCacheObject downloadedCacheObject;
+
+    public CacheInsertionThread(CacheManager cacheManager, DownloadedCacheObject downloadedCacheObject) {
         thread = new Thread( this, "Cache Thread" );
-        this.objectToBeCached = s3DownloadObject;
-        this.s3DownloadedObject = s3DownloadedObject;
+        this.downloadedCacheObject = downloadedCacheObject;
+        this.cacheManager = cacheManager;
     }
 
     @Override
     public void run() {
         log.info( "Inside Caching" );
         try {
-            byte[] contentInByteArray = IOUtils.readFully( this.s3DownloadedObject.getDownloadedObjectResource().getFile() );
+            byte[] contentInByteArray = this.downloadedCacheObject.getFileContentInBase64().getBytes();
             cacheManager.createNewCacheEntry(
-                    new FileToBeCached( this.objectToBeCached.getObjectName(), Base64.getEncoder().encodeToString( contentInByteArray )
+                    new FileToBeCached( downloadedCacheObject.getBucketName() + "/" + downloadedCacheObject.getObjectName(), Base64.getEncoder().encodeToString( contentInByteArray )
                     ) );
-            log.info( "Caching Done For Object :" + this.objectToBeCached.getObjectName() );
+            log.info( "Caching Done For Object :" + downloadedCacheObject.getBucketName() + "/" + downloadedCacheObject.getObjectName() );
 
-        } catch (IOException e) {
-            log.error( "Exception in Cache Thread" + e.getMessage() );
+        } catch (Exception e) {
+            log.error( "Exception in Cache Thread" + e );
         }
 
     }

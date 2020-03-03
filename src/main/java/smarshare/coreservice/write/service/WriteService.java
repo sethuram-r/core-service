@@ -124,7 +124,7 @@ public class WriteService {
     public Status deleteFileInStorage(File file, String bucketName) {
         log.info( "Inside deleteFileInStorage" );
         try {
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "object", jsonConverter.writeValueAsString( new S3Object( file.getFileName(), Boolean.TRUE ) ) );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock", "object", jsonConverter.writeValueAsString( new S3Object( file.getFileName() ) ) );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
                 Status status = s3WriteService.deleteObject( file.getFileName(), bucketName );
                 if (status.getMessage().equals( "Success" )) {
@@ -152,7 +152,7 @@ public class WriteService {
             List<S3Object> objectsToBeLocked = new ArrayList<>();
             if (null != folderObjects) {
                 folderObjects.forEach( object -> {
-                    objectsToBeLocked.add( new S3Object( object, Boolean.TRUE ) );
+                    objectsToBeLocked.add( new S3Object( object ) );
                 } );
             } else {
                 throw new NullPointerException( "Empty Objects Sent For Locking Operation" );

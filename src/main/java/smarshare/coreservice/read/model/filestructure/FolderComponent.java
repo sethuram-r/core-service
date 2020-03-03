@@ -1,11 +1,15 @@
 package smarshare.coreservice.read.model.filestructure;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.List;
 
  public class FolderComponent extends BucketComponent {
 
-    List<BucketComponent> bucketComponents = new ArrayList<>(  );
+
+     @JsonProperty(value = "children")
+     List<BucketComponent> bucketComponents = new ArrayList<>(  );
 
     public FolderComponent(String name, AccessInfo accessInfo, String owner, String completeName){
         this.name = name;
@@ -34,7 +38,7 @@ import java.util.List;
     //not needed yet
      public BucketComponent getRequiredFolder(String name){
          for (BucketComponent s : this.bucketComponents) {
-             if (s.name == name){
+             if (s.name.equals( name )) {
                  return  s;
              }
          }

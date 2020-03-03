@@ -55,12 +55,12 @@ public class UploadStateTasks {
     /// Have to implement kafka producer in lock server for kafka result of state machines
 
 
-    private Boolean sendEventToLockServer(SagaEventLockWrapper objectsToBeLocked) {
+    private Boolean sendEventToLockServer(SagaEventLockWrapper objectsToBeLocked, KafkaConstants eventName) {
 
         log.info( "Inside sendEventToLockServer" );
 
         try {
-            ListenableFuture<SendResult<String, SagaEventLockWrapper>> kafkaProducerFutureObject = kafkaTemplateForLockServer.send( KafkaConstants.SAGA_LOCK_TOPIC.valueOf(), KafkaConstants.LOCK.valueOf(), objectsToBeLocked );
+            ListenableFuture<SendResult<String, SagaEventLockWrapper>> kafkaProducerFutureObject = kafkaTemplateForLockServer.send( KafkaConstants.SAGA_LOCK_TOPIC.valueOf(), eventName.valueOf(), objectsToBeLocked );
             SendResult<String, SagaEventLockWrapper> producerResult = kafkaProducerFutureObject.get( 10, TimeUnit.SECONDS );
             return (null != producerResult.getRecordMetadata()) ? Boolean.TRUE : Boolean.FALSE;
         } catch (Exception e) {
@@ -88,9 +88,9 @@ public class UploadStateTasks {
     boolean lockEventToKafka(SagaEventWrapper objectsToBeLocked) {
         log.info( "Inside lockEventToKafka" );
         List<S3Object> objectsToBeLockedAsS3Object = objectsToBeLocked.getObjects().stream()
-                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName(), Boolean.TRUE ) )
+                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName() ) )
                 .collect( Collectors.toList() );
-        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeLocked.getEventId(), objectsToBeLockedAsS3Object ) );
+        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeLocked.getEventId(), objectsToBeLockedAsS3Object ), KafkaConstants.LOCK );
     }
 
 
@@ -98,9 +98,9 @@ public class UploadStateTasks {
         log.info( "Inside unLockEventToKafka" );
 
         List<S3Object> objectsToBeUnLockedAsS3Object = objectsToBeUnLocked.getObjects().stream()
-                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName(), Boolean.FALSE ) )
+                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName() ) )
                 .collect( Collectors.toList() );
-        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeUnLocked.getEventId(), objectsToBeUnLockedAsS3Object ) );
+        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeUnLocked.getEventId(), objectsToBeUnLockedAsS3Object ), KafkaConstants.UN_LOCK );
     }
 
 
@@ -131,7 +131,7 @@ public class UploadStateTasks {
                 if (!consumedRecords.isEmpty()) {
                     for (ConsumerRecord<String, SagaEventLockWrapper> record : consumedRecords)
                         if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() ))
-                            return true;
+                            return record.value().getStatus().equals( "success" );
                 } else {
                     log.info( "Waiting for LockEvents" );
                 }
@@ -147,16 +147,23 @@ public class UploadStateTasks {
 
     }
 
+    private Boolean analyseConsumesEventResults(List<BucketObjectForEvent> result) {
+
+        return !(result.stream()
+                .anyMatch( bucketObjectForEvent -> bucketObjectForEvent.getStatus().equals( "failed" ) ));
+
+    }
     private boolean consumeAccessManagementServerEvents(SagaEventWrapper objectToBeConsumed, String key) {
         log.info( "Inside consumeAccessManagementServerEvents" );
         try {
-            kafkaAccessManagementConsumer.subscribe( Collections.singletonList( KafkaConstants.SAGA_ACCESS_TOPIC.valueOf() ) );
+            kafkaAccessManagementConsumer.subscribe( Collections.singletonList( KafkaConstants.SAGA_ACCESS_RESULT_TOPIC.valueOf() ) );
             while (true) {
                 ConsumerRecords<String, SagaEventAccessManagementServiceWrapper> consumedRecords = kafkaAccessManagementConsumer.poll( Duration.ofMillis( 15 ) );
                 if (!consumedRecords.isEmpty()) {
                     for (ConsumerRecord<String, SagaEventAccessManagementServiceWrapper> record : consumedRecords)
-                        if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() ))
-                            return true;
+                        if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() )) {
+                            return analyseConsumesEventResults( record.value().getObjectsForAccessManagementEvent() );
+                        }
                 } else {
                     log.info( "Waiting for accessManagementEvents ..." );
                 }

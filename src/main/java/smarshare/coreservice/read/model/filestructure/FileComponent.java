@@ -1,6 +1,10 @@
 package smarshare.coreservice.read.model.filestructure;
 
-public class FileComponent extends BucketComponent {
+import lombok.Data;
+
+
+public @Data
+class FileComponent extends BucketComponent {
 
     public FileComponent(String name, AccessInfo accessInfo, String owner, String completeName, String lastModified) {
         this.name = name;
@@ -10,12 +14,4 @@ public class FileComponent extends BucketComponent {
         this.lastModified = lastModified;
     }
 
-    @Override
-    public String toString() {
-        return "FileComponent{" +
-                "name='" + name + '\'' +
-                ", owner='" + owner + '\'' +
-                ", accessInfo=" + accessInfo +
-                '}';
-    }
 }
