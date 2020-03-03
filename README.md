@@ -1,0 +1,2 @@
+# core-service
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/3df00dc64c0a4e4f92130febd28bbed2)](https://app.codacy.com/manual/sethuram975351/core-service?utm_source=github.com&utm_medium=referral&utm_content=sethuram975351/core-service&utm_campaign=Badge_Grade_Dashboard)
