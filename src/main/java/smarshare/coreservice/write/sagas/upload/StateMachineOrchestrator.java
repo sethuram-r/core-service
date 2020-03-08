@@ -1,6 +1,7 @@
 package smarshare.coreservice.write.sagas.upload;
 
-import smarshare.coreservice.write.model.FileToUpload;
+
+import smarshare.coreservice.write.model.UploadObject;
 import smarshare.coreservice.write.sagas.constants.UploadStateNames;
 import smarshare.coreservice.write.sagas.dto.SagaEventWrapper;
 
@@ -13,12 +14,12 @@ public class StateMachineOrchestrator {
     private SagaEventWrapper orchestratorObject;
 
 
-    public StateMachineOrchestrator(List<FileToUpload> input) {
+    public StateMachineOrchestrator(List<UploadObject> input) {
         this.orchestratorObject = wrapInputIntoOrchestratorObject( input );
         uploadStates = new UploadStates();
     }
 
-    private SagaEventWrapper wrapInputIntoOrchestratorObject(List<FileToUpload> filesToUpload) {
+    private SagaEventWrapper wrapInputIntoOrchestratorObject(List<UploadObject> filesToUpload) {
         return new SagaEventWrapper( filesToUpload, UUID.randomUUID().toString() );
     }
 

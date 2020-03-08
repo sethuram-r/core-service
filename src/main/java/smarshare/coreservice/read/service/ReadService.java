@@ -6,6 +6,7 @@ import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.cache.model.CacheManager;
 import smarshare.coreservice.cache.model.DownloadedCacheObject;
@@ -150,14 +151,13 @@ public class ReadService {
     }
 
 
-    //    @KafkaListener(groupId="readConsumer",topics = "read")
-    public void consume(String bucketToBeUpdatedOrDeletedInInternalCache, ConsumerRecord record) throws IOException {
+    @KafkaListener(groupId = "readConsumer", topics = "read")
+    public void consume(String bucketName, ConsumerRecord record) {
 
 
         if (record.key() == ("add")) {
             log.info( "Consumed Cache add Event" );
-            Bucket bucketToBeAddedInCache = jsonConverter.readValue( bucketToBeUpdatedOrDeletedInInternalCache, Bucket.class );
-            System.out.println( "result----file----->" + bucketToBeAddedInCache );
+            Bucket bucketToBeAddedInCache = new Bucket( bucketName );
             if (!bucketList.isEmpty()) {
                 bucketList.add( bucketToBeAddedInCache );
                 log.info( "Bucket has been added in the cache" );
@@ -166,10 +166,8 @@ public class ReadService {
         }
         if (record.key() == ("delete")) {
             log.info( "Consumed Cache delete Event" );
-            Bucket bucketToBeDeletedInCache = jsonConverter.readValue( bucketToBeUpdatedOrDeletedInInternalCache, Bucket.class );
-            System.out.println( "result----file----->" + bucketToBeDeletedInCache );
             if (!bucketList.isEmpty()) {
-                bucketList.remove( bucketToBeDeletedInCache );
+                bucketList.removeIf( bucket -> bucket.getName().equals( bucketName ) );
                 log.info( "Bucket has been deleted from the cache" );
             }
 

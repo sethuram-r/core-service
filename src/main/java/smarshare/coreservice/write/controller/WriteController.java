@@ -4,11 +4,13 @@ package smarshare.coreservice.write.controller;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import smarshare.coreservice.write.model.*;
-import smarshare.coreservice.write.service.WriteService;
+import smarshare.coreservice.write.dto.DeleteObjectRequest;
+import smarshare.coreservice.write.dto.DeleteObjectsRequest;
+import smarshare.coreservice.write.model.Bucket;
+import smarshare.coreservice.write.model.UploadObject;
+import smarshare.coreservice.write.service.BucketObjectService;
+import smarshare.coreservice.write.service.BucketService;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -18,59 +20,58 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class WriteController {
 
-    private WriteService writeService;
+    private BucketObjectService bucketObjectService;
+    private BucketService bucketService;
+
 
     @Autowired
-    WriteController(WriteService writeService) {
-        this.writeService = writeService;
+    WriteController(BucketObjectService bucketObjectService, BucketService bucketService) {
+        this.bucketObjectService = bucketObjectService;
+        this.bucketService = bucketService;
     }
 
 
     @PostMapping(value = "bucket")
-    public Status createBucket(@RequestBody Bucket bucket) {
+    public Boolean createBucket(@RequestBody Bucket bucket) {
         log.info( "Inside createBucket" );
-        return writeService.createBucketInStorage( bucket );
+        return bucketService.createBucket( bucket );
 
     }
 
     @DeleteMapping(value = "bucket")
-    public void deleteBucket(@RequestBody Bucket bucket) {
+    public Boolean deleteBucket(@RequestParam("bucketName") String bucketName) {
         log.info( "Inside createBucket" );
-        writeService.deleteBucketInStorage( bucket );
+        return bucketService.deleteBucket( bucketName );
 
     }
 
     @PostMapping(value = "folder/empty")
-    public Status createFolder(@RequestParam("folder") Folder folder, @RequestParam("bucketName") String bucketName, @RequestParam("owner") String owner) {
+    public Boolean createFolder(@RequestBody UploadObject emptyFolder) {
         log.info( "Inside createFolder" );
-//        return writeService.createEmptyFolder( "test/" , "file.server.1" );
-        return writeService.createEmptyFolder( folder, bucketName, owner );
+        return bucketObjectService.createEmptyFolder( emptyFolder );
     }
 
-    // @RequestParam("file") MultipartFile file
 
+    //objectName is always complete name without bucketName
     @DeleteMapping(value = "file")
-    public Status deleteFile(@RequestParam("file") File file, @RequestParam("bucketName") String bucketName) {
+    public Boolean deleteFile(@RequestBody DeleteObjectRequest deleteObjectRequest) {
         log.info( "Inside deleteFile" );
-        return writeService.deleteFileInStorage( file, bucketName );
+        return bucketObjectService.deleteObject( deleteObjectRequest.getObjectName(),
+                deleteObjectRequest.getBucketName(),
+                deleteObjectRequest.getOwnerName() );
     }
 
     @DeleteMapping(value = "folder")
-    public Status deleteFolder() {
-//    public Status deleteFolder(@RequestParam("folder") List<String> folderObjects, @RequestParam("bucketName") String bucketName){
+    public Boolean deleteFolder(@RequestBody DeleteObjectsRequest deleteObjectsRequest) {
         log.info( "Inside deleteFolder" );
-        List<String> stub = new ArrayList<>();
-        stub.add( "test/" );
-        // lock has to be implemented
-        return writeService.deleteFolderInStorage( stub, "file.server.1" );
-//        return writeService.deleteFolderInStorage( folderObjects , bucketName );
+        return bucketObjectService.deleteFolderInStorage( deleteObjectsRequest );
     }
 
 
     @PostMapping(value = "object")
-    public Boolean uploadObject(@RequestBody FileToUpload[] filesToUpload) {
+    public Boolean uploadObject(@RequestBody List<UploadObject> filesToUpload) {
         log.info( "Inside uploadFile " );
-        return writeService.UploadObjectThroughSaga( Arrays.asList( filesToUpload ) );
+        return bucketObjectService.UploadObjectThroughSaga( filesToUpload );
     }
 
 

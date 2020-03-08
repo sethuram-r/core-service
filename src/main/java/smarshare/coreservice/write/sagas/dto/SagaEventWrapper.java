@@ -1,15 +1,16 @@
 package smarshare.coreservice.write.sagas.dto;
 
-import smarshare.coreservice.write.model.FileToUpload;
+
+import smarshare.coreservice.write.model.UploadObject;
 
 import java.util.List;
 
 public class SagaEventWrapper {
     private String eventId;
-    private List<FileToUpload> objects;
+    private List<UploadObject> objects;
     private String recentSuccessfulState;
 
-    public SagaEventWrapper(List<FileToUpload> objects, String eventId) {
+    public SagaEventWrapper(List<UploadObject> objects, String eventId) {
         this.objects = objects;
         this.eventId = eventId;
     }
@@ -27,7 +28,7 @@ public class SagaEventWrapper {
         return eventId;
     }
 
-    public List<FileToUpload> getObjects() {
+    public List<UploadObject> getObjects() {
         return objects;
     }
 }

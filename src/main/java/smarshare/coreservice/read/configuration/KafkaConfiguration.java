@@ -1,6 +1,5 @@
-package smarshare.coreservice.configuration;
+package smarshare.coreservice.read.configuration;
 
-import com.fasterxml.jackson.databind.JsonDeserializer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.context.annotation.Bean;
@@ -9,7 +8,6 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import smarshare.coreservice.write.model.FilesToUpload;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,29 +15,26 @@ import java.util.Map;
 @EnableKafka
 @Configuration
 public class KafkaConfiguration {
-
-
     @Bean
-    public ConsumerFactory<String, FilesToUpload> consumerFactory() {
+    public ConsumerFactory<String, String> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 "127.0.0.1:9092" );
-
         props.put(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                 StringDeserializer.class );
         props.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                JsonDeserializer.class );
+                StringDeserializer.class );
         return new DefaultKafkaConsumerFactory<>( props );
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, FilesToUpload>
+    public ConcurrentKafkaListenerContainerFactory<String, String>
     kafkaListenerContainerFactory() {
 
-        ConcurrentKafkaListenerContainerFactory<String, FilesToUpload> factory =
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory( consumerFactory() );
         return factory;

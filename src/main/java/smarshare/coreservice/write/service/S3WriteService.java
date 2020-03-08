@@ -7,7 +7,6 @@ import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.s3.transfer.Transfer;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.Upload;
-import com.amazonaws.services.s3.transfer.model.UploadResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
@@ -15,71 +14,69 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.write.exception.BucketExistException;
 import smarshare.coreservice.write.model.Bucket;
-import smarshare.coreservice.write.model.FileToUpload;
-import smarshare.coreservice.write.model.Folder;
-import smarshare.coreservice.write.model.Status;
+import smarshare.coreservice.write.model.UploadObject;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class S3WriteService {
 
     private AmazonS3 amazonS3Client;
-    private Status status;
     private TransferManager transferManager;
 
 
     @Autowired
-    S3WriteService(AmazonS3 amazonS3Client, Status status, TransferManager transferManager) {
+    S3WriteService(AmazonS3 amazonS3Client, TransferManager transferManager) {
         this.amazonS3Client = amazonS3Client;
-        this.status = status;
         this.transferManager = transferManager;
     }
 
-    public Status createBucket(Bucket bucket) {
-
-        log.info( "Inside createBucket in S3Service" );
-
-        if (amazonS3Client.doesBucketExistV2( bucket.getName() )) {
-            throw new BucketExistException( bucket.getName() + " already exists!" );
-        } else {
-            try {
-                amazonS3Client.createBucket( bucket.getName() );
-                status.setMessage( "Success" );
-                return status;
-            } catch (AmazonS3Exception e) {
-                log.error( e.getErrorMessage() );
-                status.setMessage( "Failed" );
-                return status;
+    public Boolean createBucket(Bucket bucket) {
+        try {
+            log.info( "Inside createBucket in S3Service" );
+            if (amazonS3Client.doesBucketExistV2( bucket.getBucketName() )) {
+                throw new BucketExistException( bucket.getBucketName() + " already exists in S3 Global Namespace! Choose Another Bucket Name" );
+            } else {
+                CreateBucketRequest createBucketRequest = new CreateBucketRequest( bucket.getBucketName(), "eu-west-1" )
+                        .withCannedAcl( CannedAccessControlList.BucketOwnerFullControl );
+                amazonS3Client.createBucket( createBucketRequest );
+                return Boolean.TRUE;
             }
+        } catch (AmazonS3Exception e) {
+            log.error( e.getErrorMessage() );
         }
+        return Boolean.FALSE;
     }
 
-    public Status deleteBucket(Bucket bucket) {
+    public Boolean deleteBucket(String bucketName) {
         log.info( "Inside deleteBucket in S3Service" ); // un-versioned bucket
 
         try {
-            List<S3ObjectSummary> objectsInGivenBucket = amazonS3Client.listObjects( bucket.getName() ).getObjectSummaries();
+            List<S3ObjectSummary> objectsInGivenBucket = amazonS3Client.listObjects( bucketName ).getObjectSummaries();
             if (!objectsInGivenBucket.isEmpty()) {
-                objectsInGivenBucket.forEach( objectSummary -> {
-                    amazonS3Client.deleteObject( bucket.getName(), objectSummary.getKey() );
-                } );
+                List<DeleteObjectsRequest.KeyVersion> objectKeys = objectsInGivenBucket.stream()
+                        .map( objectSummary -> new DeleteObjectsRequest.KeyVersion( objectSummary.getKey() ) )
+                        .collect( Collectors.toList() );
+
+                DeleteObjectsRequest multiObjectDeleteRequest = new DeleteObjectsRequest( bucketName )
+                        .withKeys( objectKeys )
+                        .withQuiet( false );
+
+                DeleteObjectsResult deleteResult = amazonS3Client.deleteObjects( multiObjectDeleteRequest );
+                log.info( deleteResult.getDeletedObjects().size() + " : Bucket Objects Deleted" );
             }
-            amazonS3Client.deleteBucket( bucket.getName() );
-            status.setMessage( "Success" );
-            return status;
+            amazonS3Client.deleteBucket( bucketName );
+            return true;
         } catch (Exception e) {
-            log.error( "Exception while deleting the bucket------->" + e.getMessage() );
-            status.setMessage( "Failed" );
-            return status;
+            log.error( "Exception while deleting the bucket " + bucketName + e.getMessage() );
         }
+        return false;
     }
 
     private File getDummyFile() throws IOException {
@@ -87,74 +84,80 @@ public class S3WriteService {
         return resource.getFile();
     }
 
-    public Status createObjectInSpecifiedBucket(Folder folder, String bucketName) {
+    public Boolean createObjectInBucket(UploadObject emptyFolder) {
         log.info( "Inside createObjectInSpecifiedBucket" );
-        try {
-            amazonS3Client.putObject( new PutObjectRequest( bucketName, folder.getName(), getDummyFile() ) );
-            status.setMessage( "Success" );
-            return status;
-        } catch (IOException e) {
-            log.error( "Exception while creating empty folder in specified bucket------->" + e.getMessage() );
-            status.setMessage( "Failed" );
-            return status;
-        }
+        amazonS3Client.putObject( emptyFolder.getBucketName(), emptyFolder.getObjectName(), "" );
+        return Boolean.TRUE;
     }
 
-    public Status deleteObject(String objectName, String bucketName) {
+    public Boolean deleteObject(String objectName, String bucketName) {
         log.info( "Inside deleteObject" );
         try {
             amazonS3Client.deleteObject( bucketName, objectName );
-            status.setMessage( "Success" );
-            return status;
+            return Boolean.TRUE;
         } catch (Exception e) {
             log.error( "Exception while deleting object in specified bucket------->" + e.getMessage() );
-            status.setMessage( "Failed" );
-            return status;
         }
+        return Boolean.FALSE;
     }
 
-    public Status deleteObjects(List<String> objectNames, String bucketName) {
+    public DeleteObjectsResult deleteObjects(List<String> objectNames, String bucketName) {
         log.info( "Inside deleteObjects" );
         try {
-            List<DeleteObjectsRequest.KeyVersion> keys = new ArrayList<>();
-            objectNames.forEach( key -> keys.add( new DeleteObjectsRequest.KeyVersion( key ) ) );
-            DeleteObjectsRequest deleteObjectsRequest = new DeleteObjectsRequest( bucketName ).withKeys( keys );
-            DeleteObjectsResult result = amazonS3Client.deleteObjects( deleteObjectsRequest );
-            System.out.println( result.getDeletedObjects().get( 0 ).getKey() );
-            status.setMessage( "Success" );
-            return status;
+
+            List<DeleteObjectsRequest.KeyVersion> objectKeys = objectNames.stream()
+                    .map( DeleteObjectsRequest.KeyVersion::new )
+                    .collect( Collectors.toList() );
+
+            DeleteObjectsRequest deleteObjectsRequest = new DeleteObjectsRequest( bucketName )
+                    .withKeys( objectKeys )
+                    .withQuiet( false );
+            return amazonS3Client.deleteObjects( deleteObjectsRequest );
         } catch (AmazonServiceException e) {
             log.error( "Exception while deleting folder in specified bucket------->" + e.getMessage() );
-            status.setMessage( "Failed" );
-            return status;
         }
+        return null;
     }
 
-    public Transfer.TransferState uploadObject(FileToUpload fileToUpload) {
+    public Transfer.TransferState uploadObject(UploadObject uploadObject) {
         log.info( "Inside uploadObject" );
         try {
+
+            byte[] bytes = Base64.getDecoder().decode( uploadObject.getContent() );
             ObjectMetadata metadata = new ObjectMetadata();
-            byte[] base64DecodedContentInByteArray = Base64.getDecoder().decode( fileToUpload.getUploadedFileContent() );
-            InputStream inputStreamOfFileContent = new ByteArrayInputStream( base64DecodedContentInByteArray );
-            metadata.setContentLength( base64DecodedContentInByteArray.length );
+            metadata.setContentLength( bytes.length );
             PutObjectRequest request = new PutObjectRequest(
-                    fileToUpload.getBucketName(),
-                    fileToUpload.getSelectedFolderWhereFolderHasToBeUploaded() + fileToUpload.getUploadedFileName(),
-                    inputStreamOfFileContent, metadata );
+                    uploadObject.getBucketName(),
+                    uploadObject.getObjectName(),
+                    new ByteArrayInputStream( bytes ), metadata );
+
             Upload uploadedObject = transferManager.upload( request );
+
             uploadedObject.addProgressListener( (ProgressListener) progressEvent -> {
-                log.info( "Transferred bytes of object " + fileToUpload.getUploadedFileName() + " : " + progressEvent.getBytesTransferred() );
+                log.info( "Transferred bytes of object " + uploadObject.getObjectName() + " : " + progressEvent.getBytesTransferred() );
             } );
-            UploadResult result = uploadedObject.waitForUploadResult();
-            transferManager.shutdownNow();// have to verify use of the shutdown method
-            if (null != result.getVersionId()) {
-                log.info( "Transfer of Object " + fileToUpload.getUploadedFileName() + " : " + Transfer.TransferState.Completed );
-                return Transfer.TransferState.Completed;
-            }
+            uploadedObject.waitForUploadResult();
+
+            log.info( "Transfer of " + uploadedObject.getState() );
+
+            return uploadedObject.getState();
         } catch (InterruptedException e) {
             log.error( String.format( "Exception occurred while uploading %s", e.getMessage() ) );
         }
         return Transfer.TransferState.Failed;
+    }
+
+    public Boolean uploadObjects(List<UploadObject> uploadObjects) {
+        try {
+            long resultCount = uploadObjects.stream()
+                    .map( this::uploadObject )
+                    .filter( transferState -> transferState == Transfer.TransferState.Completed )
+                    .count();
+            if (resultCount == uploadObjects.size()) return Boolean.TRUE;
+        } catch (Exception e) {
+            log.error( String.format( "Exception occurred while uploading %s", e ) );
+        }
+        return Boolean.FALSE;
     }
 
 

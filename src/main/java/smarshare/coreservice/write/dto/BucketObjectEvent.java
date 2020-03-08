@@ -4,7 +4,7 @@ package smarshare.coreservice.write.dto;
 import lombok.Data;
 
 public @Data
-class BucketObjectForEvent {
+class BucketObjectEvent {
 
     private String bucketName;
     private String objectName;

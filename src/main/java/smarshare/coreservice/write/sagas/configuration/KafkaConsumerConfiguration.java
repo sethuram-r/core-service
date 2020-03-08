@@ -13,7 +13,6 @@ import smarshare.coreservice.write.sagas.dto.SagaEventLockWrapper;
 import java.util.HashMap;
 import java.util.Map;
 
-//@EnableKafka // have to check whether its needed or not
 @Configuration
 public class KafkaConsumerConfiguration {
 

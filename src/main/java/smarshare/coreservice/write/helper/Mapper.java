@@ -1,16 +1,16 @@
 package smarshare.coreservice.write.helper;
 
-import smarshare.coreservice.write.dto.BucketObjectForEvent;
-import smarshare.coreservice.write.model.FileToUpload;
+import smarshare.coreservice.write.dto.BucketObjectEvent;
+import smarshare.coreservice.write.model.UploadObject;
 
 public class Mapper {
 
-    public static BucketObjectForEvent mappingUploadObjectToBucketObjectEvent(FileToUpload fileToUpload) {
-        BucketObjectForEvent bucketObjectForEvent = new BucketObjectForEvent();
-        bucketObjectForEvent.setBucketName( fileToUpload.getBucketName() );
-        bucketObjectForEvent.setObjectName( fileToUpload.getUploadedFileName() );
-        bucketObjectForEvent.setOwnerName( fileToUpload.getOwnerOfTheFile() );
-        bucketObjectForEvent.setUserName( fileToUpload.getOwnerOfTheFile() );
-        return bucketObjectForEvent;
+    public static BucketObjectEvent mappingUploadObjectToBucketObjectEvent(UploadObject uploadObject) {
+        BucketObjectEvent bucketObjectEvent = new BucketObjectEvent();
+        bucketObjectEvent.setBucketName( uploadObject.getBucketName() );
+        bucketObjectEvent.setObjectName( uploadObject.getObjectName() );
+        bucketObjectEvent.setOwnerName( uploadObject.getOwner() );
+        bucketObjectEvent.setUserName( uploadObject.getOwner() );
+        return bucketObjectEvent;
     }
 }

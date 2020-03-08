@@ -1,22 +1,11 @@
 package smarshare.coreservice.write.model;
 
 
-public class Bucket {
+import lombok.Data;
 
-    private String name;
+public @Data
+class Bucket {
 
-    public Bucket(String name) {
-        this.name = name;
-    }
+    private String bucketName;
 
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public String toString() {
-        return "Bucket{" +
-                "name='" + name + '\'' +
-                '}';
-    }
 }

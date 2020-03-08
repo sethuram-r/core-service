@@ -1,7 +1,6 @@
 package smarshare.coreservice.write.sagas.upload;
 
 
-import com.amazonaws.services.s3.transfer.Transfer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -11,15 +10,14 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import org.springframework.util.concurrent.ListenableFuture;
-import smarshare.coreservice.write.dto.BucketObjectForEvent;
+import smarshare.coreservice.write.dto.BucketObjectEvent;
 import smarshare.coreservice.write.helper.Mapper;
-import smarshare.coreservice.write.model.Status;
 import smarshare.coreservice.write.model.lock.S3Object;
 import smarshare.coreservice.write.sagas.constants.KafkaConstants;
 import smarshare.coreservice.write.sagas.dto.SagaEventAccessManagementServiceWrapper;
 import smarshare.coreservice.write.sagas.dto.SagaEventLockWrapper;
 import smarshare.coreservice.write.sagas.dto.SagaEventWrapper;
-import smarshare.coreservice.write.service.WriteService;
+import smarshare.coreservice.write.service.BucketObjectService;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -35,7 +33,7 @@ public class UploadStateTasks {
     private KafkaTemplate<String, SagaEventAccessManagementServiceWrapper> kafkaTemplateForAccessManagementServer;
     private KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer;
     private KafkaConsumer<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementConsumer;
-    private WriteService writeService;
+    private BucketObjectService bucketObjectService;
 
 
     @Autowired
@@ -43,12 +41,12 @@ public class UploadStateTasks {
                      KafkaTemplate<String, SagaEventAccessManagementServiceWrapper> kafkaTemplateForAccessManagementServer,
                      KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer,
                      KafkaConsumer<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementConsumer,
-                     WriteService writeService) {
+                     BucketObjectService bucketObjectService) {
         this.kafkaTemplateForLockServer = kafkaTemplateForLockServer;
         this.kafkaTemplateForAccessManagementServer = kafkaTemplateForAccessManagementServer;
         this.kafkaLockConsumer = kafkaLockConsumer;
         this.kafkaAccessManagementConsumer = kafkaAccessManagementConsumer;
-        this.writeService = writeService;
+        this.bucketObjectService = bucketObjectService;
     }
 
 
@@ -88,7 +86,7 @@ public class UploadStateTasks {
     boolean lockEventToKafka(SagaEventWrapper objectsToBeLocked) {
         log.info( "Inside lockEventToKafka" );
         List<S3Object> objectsToBeLockedAsS3Object = objectsToBeLocked.getObjects().stream()
-                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName() ) )
+                .map( uploadObject -> new S3Object( uploadObject.getBucketName() + "/" + uploadObject.getObjectName() ) )
                 .collect( Collectors.toList() );
         return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeLocked.getEventId(), objectsToBeLockedAsS3Object ), KafkaConstants.LOCK );
     }
@@ -98,7 +96,7 @@ public class UploadStateTasks {
         log.info( "Inside unLockEventToKafka" );
 
         List<S3Object> objectsToBeUnLockedAsS3Object = objectsToBeUnLocked.getObjects().stream()
-                .map( fileToUpload -> new S3Object( fileToUpload.getUploadedFileName() ) )
+                .map( uploadObject -> new S3Object( uploadObject.getBucketName() + "/" + uploadObject.getObjectName() ) )
                 .collect( Collectors.toList() );
         return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeUnLocked.getEventId(), objectsToBeUnLockedAsS3Object ), KafkaConstants.UN_LOCK );
     }
@@ -106,7 +104,7 @@ public class UploadStateTasks {
 
     boolean accessManagementServiceCreateEntryEventToKafka(SagaEventWrapper objectsToCreateAccessDetails) {
         log.info( "Inside accessManagementServiceCreateEntryEventToKafka" );
-        List<BucketObjectForEvent> uploadObjectEvents = objectsToCreateAccessDetails.getObjects().stream()
+        List<BucketObjectEvent> uploadObjectEvents = objectsToCreateAccessDetails.getObjects().stream()
                 .map( Mapper::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
         return sendEventToAccessManagementServer( new SagaEventAccessManagementServiceWrapper( objectsToCreateAccessDetails.getEventId(), uploadObjectEvents ), KafkaConstants.CREATE.valueOf() );
     }
@@ -115,7 +113,7 @@ public class UploadStateTasks {
     boolean accessManagementServiceDeleteEntryEventToKafka(SagaEventWrapper objectsToDeleteAccessDetails) {
 
         log.info( "Inside accessManagementServiceCreateEntryEventToKafka" );
-        List<BucketObjectForEvent> uploadObjectEvents = objectsToDeleteAccessDetails.getObjects().stream()
+        List<BucketObjectEvent> uploadObjectEvents = objectsToDeleteAccessDetails.getObjects().stream()
                 .map( Mapper::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
         return sendEventToAccessManagementServer( new SagaEventAccessManagementServiceWrapper( objectsToDeleteAccessDetails.getEventId(), uploadObjectEvents ), KafkaConstants.DELETE.valueOf() );
     }
@@ -147,7 +145,7 @@ public class UploadStateTasks {
 
     }
 
-    private Boolean analyseConsumesEventResults(List<BucketObjectForEvent> result) {
+    private Boolean analyseConsumesEventResults(List<BucketObjectEvent> result) {
 
         return !(result.stream()
                 .anyMatch( bucketObjectForEvent -> bucketObjectForEvent.getStatus().equals( "failed" ) ));
@@ -199,8 +197,7 @@ public class UploadStateTasks {
 
         log.info( "Inside uploadToS3AndRefreshCache" );
         try {
-            List<Transfer.TransferState> uploadedResult = writeService.uploadObjectToS3( objectToBeConsumed.getObjects() );
-            return uploadedResult.stream().allMatch( transferState -> transferState.equals( Transfer.TransferState.Completed ) );
+            return bucketObjectService.uploadObjectsToS3( objectToBeConsumed.getObjects() );
         } catch (Exception e) {
             log.error( "Exception in uploadToS3AndRefreshCache" + " " + e.getMessage() );
         }
@@ -211,8 +208,8 @@ public class UploadStateTasks {
 
         log.info( "Inside deleteS3UploadAndCache" );
         try {
-            List<Status> deletionResult = writeService.deleteObjectsForSagaFromS3( objectToBeConsumed.getObjects() );
-            return deletionResult.stream().allMatch( status -> status.getMessage().equals( "Success" ) );
+            List<Boolean> deletionResult = bucketObjectService.deleteObjectsForSagaFromS3( objectToBeConsumed.getObjects() );
+            return deletionResult.stream().allMatch( bool -> bool.equals( Boolean.TRUE ) );
         } catch (Exception e) {
             log.error( "Exception in uploadToS3AndRefreshCache" + " " + e.getMessage() );
         }

@@ -1,7 +1,7 @@
 package smarshare.coreservice.write.helper;
 
 import lombok.extern.slf4j.Slf4j;
-import smarshare.coreservice.write.model.FileToUpload;
+import smarshare.coreservice.write.model.UploadObject;
 import smarshare.coreservice.write.sagas.dto.SagaEventWrapper;
 import smarshare.coreservice.write.sagas.upload.StateMachineOrchestrator;
 
@@ -14,9 +14,9 @@ public class SagaOrchestratorThread implements Runnable {
     StateMachineOrchestrator stateMachineOrchestrator;
 
 
-    public SagaOrchestratorThread(List<FileToUpload> filesToUpload) {
+    public SagaOrchestratorThread(List<UploadObject> uploadObjects) {
         thread = new Thread( this, "Saga Upload Orchestrator Thread" );
-        this.stateMachineOrchestrator = new StateMachineOrchestrator( filesToUpload );
+        this.stateMachineOrchestrator = new StateMachineOrchestrator( uploadObjects );
     }
 
     @Override
