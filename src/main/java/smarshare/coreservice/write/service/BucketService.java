@@ -6,6 +6,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.concurrent.ListenableFuture;
+import smarshare.coreservice.write.dto.CustomResponse;
+import smarshare.coreservice.write.exception.BucketExistException;
 import smarshare.coreservice.write.model.Bucket;
 
 @Slf4j
@@ -21,22 +23,33 @@ public class BucketService {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public Boolean createBucket(Bucket bucket) {
+    public CustomResponse createBucket(Bucket bucket) {
         log.info( "Inside createBucketInStorage" );
-        Boolean isBucketCreated = s3WriteService.createBucket( bucket );
-        if (isBucketCreated) {
-            try {
-                ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "AccessManagement", "createBucket", bucket.getBucketName() );
-                ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "add", bucket.getBucketName() );
-                if (!(isUpdatingTheCacheEventForReadServerSent.get().getRecordMetadata().toString().isEmpty()
-                        && isAccessInfoEventSent.get().getRecordMetadata().toString().isEmpty()))
-                    return true;
-            } catch (Exception exception) {
-                log.error( " Exception while publishing user to Kafka " + exception.getCause() + exception.getMessage() );
-                return false;
+
+        CustomResponse customResponse = new CustomResponse();
+        try {
+            if (Boolean.FALSE.equals( s3WriteService.doesBucketExist( bucket.getBucketName() ) )) {
+                System.out.println( " isBucketCreated---inside--->" );
+                Boolean isBucketCreated = s3WriteService.createBucket( bucket );
+                System.out.println( " isBucketCreated------>" + isBucketCreated );
+                if (isBucketCreated) {
+                    ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "BucketAccessManagement", "createBucket", bucket.getBucketName() );
+                    ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "add", bucket.getBucketName() );
+                    if (!(isUpdatingTheCacheEventForReadServerSent.get().getRecordMetadata().toString().isEmpty()
+                            && isAccessInfoEventSent.get().getRecordMetadata().toString().isEmpty())) {
+                        customResponse.setOperationResult( true );
+                        return customResponse;
+                    }
+
+                }
             }
+        } catch (BucketExistException e) {
+            customResponse.setErrorMessage( bucket.getBucketName() + " already exists in S3 Global Namespace! Choose Another Bucket Name" );
+        } catch (Exception exception) {
+            log.error( " Exception while publishing user to Kafka " + exception.getCause() + exception.getMessage() );
         }
-        return isBucketCreated;
+        customResponse.setOperationResult( false );
+        return customResponse;
     }
 
     public Boolean deleteBucket(String bucketName) {
@@ -44,7 +57,7 @@ public class BucketService {
         Boolean deleteBucketStatus = s3WriteService.deleteBucket( bucketName );
         if (deleteBucketStatus) {
             try {
-                ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "AccessManagement", "deleteBucket", bucketName );
+                ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "BucketAccessManagement", "deleteBucket", bucketName );
                 ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "delete", bucketName );
                 if (!(isUpdatingTheCacheEventForReadServerSent.get().getRecordMetadata().toString().isEmpty()
                         && isAccessInfoEventSent.get().getRecordMetadata().toString().isEmpty()))

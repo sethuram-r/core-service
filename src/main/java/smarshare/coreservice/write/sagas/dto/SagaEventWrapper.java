@@ -8,7 +8,7 @@ import java.util.List;
 public class SagaEventWrapper {
     private String eventId;
     private List<UploadObject> objects;
-    private String recentSuccessfulState;
+    private String recentSuccessfulState = "";
 
     public SagaEventWrapper(List<UploadObject> objects, String eventId) {
         this.objects = objects;

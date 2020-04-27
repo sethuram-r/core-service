@@ -33,7 +33,7 @@ public class KafkaProducerConfiguration {
         return new DefaultKafkaProducerFactory<>( this.configurationProperties );
     }
 
-    @Bean
+    @Bean(name = "kafkaTemplateForLockServer")
     public KafkaTemplate<String, SagaEventLockWrapper> kafkaLockTemplate() {
         return new KafkaTemplate<>( lockProducerFactory() );
     }
@@ -43,7 +43,7 @@ public class KafkaProducerConfiguration {
         return new DefaultKafkaProducerFactory<>( this.configurationProperties );
     }
 
-    @Bean
+    @Bean(name = "kafkaTemplateForAccessManagementServer")
     public KafkaTemplate<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementTemplate() {
         return new KafkaTemplate<>( accessManagementProducerFactory() );
     }

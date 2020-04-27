@@ -21,14 +21,14 @@ public class ReadController {
     private ReadService readService;
 
     @Autowired
-    ReadController(ReadService readService){
+    ReadController(ReadService readService) {
         this.readService = readService;
     }
 
-    @GetMapping(value = "buckets/{userName}")
-    public ResponseEntity getBucketList(@PathVariable String userName) {
+    @GetMapping(value = "buckets")
+    public ResponseEntity getBucketList(@RequestParam("userName") String userName, @RequestParam("email") String email) {
         log.info( "Inside getBucketList" );
-        return ResponseEntity.ok().body( readService.getBucketsByUserName( userName ) );
+        return ResponseEntity.ok().body( readService.getBucketsByUserNameAndEmail( userName, email ) );
     }
 
     @GetMapping(value = "objects")
@@ -47,6 +47,7 @@ public class ReadController {
         return ResponseEntity.ok()
                 .contentType( MediaType.parseMediaType( "application/octet-stream" ) )
                 .header( HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"" )
+                .header( HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION )
                 .body( readService.downloadFile( objectName, bucketName ).getDownloadedObjectResource() );
     }
 

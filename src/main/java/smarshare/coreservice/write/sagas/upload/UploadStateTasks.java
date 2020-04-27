@@ -106,7 +106,8 @@ public class UploadStateTasks {
         log.info( "Inside accessManagementServiceCreateEntryEventToKafka" );
         List<BucketObjectEvent> uploadObjectEvents = objectsToCreateAccessDetails.getObjects().stream()
                 .map( Mapper::mappingUploadObjectToBucketObjectEvent ).collect( Collectors.toList() );
-        return sendEventToAccessManagementServer( new SagaEventAccessManagementServiceWrapper( objectsToCreateAccessDetails.getEventId(), uploadObjectEvents ), KafkaConstants.CREATE.valueOf() );
+        final SagaEventAccessManagementServiceWrapper sagaEventData = new SagaEventAccessManagementServiceWrapper( objectsToCreateAccessDetails.getEventId(), uploadObjectEvents );
+        return sendEventToAccessManagementServer( sagaEventData, KafkaConstants.CREATE.valueOf() );
     }
 
 
@@ -121,15 +122,16 @@ public class UploadStateTasks {
 
     private boolean consumeLockServerEvents(SagaEventWrapper objectToBeConsumed, String key) {
         log.info( "Inside consumeLockServerEvents" );
-
         try {
-            kafkaLockConsumer.subscribe( Collections.singletonList( KafkaConstants.SAGA_LOCK_TOPIC.valueOf() ) );
+            kafkaLockConsumer.subscribe( Collections.singletonList( KafkaConstants.SAGA_LOCK_RESULT_TOPIC.valueOf() ) );
             while (true) {
                 ConsumerRecords<String, SagaEventLockWrapper> consumedRecords = kafkaLockConsumer.poll( Duration.ofMillis( 15 ) );
                 if (!consumedRecords.isEmpty()) {
-                    for (ConsumerRecord<String, SagaEventLockWrapper> record : consumedRecords)
-                        if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() ))
+                    for (ConsumerRecord<String, SagaEventLockWrapper> record : consumedRecords) {
+                        if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() )) {
                             return record.value().getStatus().equals( "success" );
+                        }
+                    }
                 } else {
                     log.info( "Waiting for LockEvents" );
                 }
@@ -139,29 +141,26 @@ public class UploadStateTasks {
             System.out.println( "Exception in consumeLockServerEvents" + " " + e.getMessage() + " " + e.getCause() );
 
         } finally {
-            kafkaLockConsumer.close();
+            kafkaLockConsumer.unsubscribe();
         }
         return false;
 
     }
 
-    private Boolean analyseConsumesEventResults(List<BucketObjectEvent> result) {
-
-        return !(result.stream()
-                .anyMatch( bucketObjectForEvent -> bucketObjectForEvent.getStatus().equals( "failed" ) ));
-
-    }
     private boolean consumeAccessManagementServerEvents(SagaEventWrapper objectToBeConsumed, String key) {
         log.info( "Inside consumeAccessManagementServerEvents" );
         try {
+
             kafkaAccessManagementConsumer.subscribe( Collections.singletonList( KafkaConstants.SAGA_ACCESS_RESULT_TOPIC.valueOf() ) );
             while (true) {
-                ConsumerRecords<String, SagaEventAccessManagementServiceWrapper> consumedRecords = kafkaAccessManagementConsumer.poll( Duration.ofMillis( 15 ) );
+                ConsumerRecords<String, SagaEventAccessManagementServiceWrapper> consumedRecords = kafkaAccessManagementConsumer.poll( Duration.ofMillis( 30 ) );
                 if (!consumedRecords.isEmpty()) {
-                    for (ConsumerRecord<String, SagaEventAccessManagementServiceWrapper> record : consumedRecords)
+                    for (ConsumerRecord<String, SagaEventAccessManagementServiceWrapper> record : consumedRecords) {
                         if (record.key().equals( key ) && record.value().getEventId().equals( objectToBeConsumed.getEventId() )) {
-                            return analyseConsumesEventResults( record.value().getObjectsForAccessManagementEvent() );
+                            return record.value().getStatus().equals( "success" );
                         }
+                    }
+
                 } else {
                     log.info( "Waiting for accessManagementEvents ..." );
                 }
@@ -171,7 +170,7 @@ public class UploadStateTasks {
             System.out.println( "Exception in consumeAccessManagementServerEvents" + " " + e.getMessage() + " " + e.getCause() );
 
         } finally {
-            kafkaLockConsumer.close();
+            kafkaAccessManagementConsumer.unsubscribe();
         }
         return false;
 

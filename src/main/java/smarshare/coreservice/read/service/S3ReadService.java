@@ -53,13 +53,17 @@ public class S3ReadService {
 
     private Map<String, String> getObjectKeys(String bucketName) {
 
-        return amazonS3Client.listObjectsV2( bucketName ).getObjectSummaries().stream()
+        final LinkedHashMap<String, String> collect = amazonS3Client.listObjectsV2( bucketName ).getObjectSummaries().stream()
                 .collect( Collectors.toMap(
                         S3ObjectSummary::getKey,
-                        objectSummary -> objectSummary.getLastModified().toString(),
+                        objectSummary -> objectSummary.getLastModified().toLocaleString(),
                         (u, v) -> u,
                         LinkedHashMap::new )
                 );
+
+        System.out.println( collect.toString() );
+
+        return collect;
     }
 
     public String listObjectsWithMetadata(String userName, String bucketName) {

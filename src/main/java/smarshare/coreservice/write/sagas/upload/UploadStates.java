@@ -1,13 +1,16 @@
 package smarshare.coreservice.write.sagas.upload;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import smarshare.coreservice.write.sagas.constants.UploadStateNames;
 
-
+@Slf4j
+@Component
 public class UploadStates {
 
 
-    @Autowired
+
     UploadStateTasks uploadStateTasks;
     private StateTemplate uploadRequestAccepted;
     private StateTemplate uploadRequestRejected;
@@ -24,88 +27,105 @@ public class UploadStates {
     private StateTemplate completed;
     private StateTemplate error;
 
+    @Autowired
+    public UploadStates(UploadStateTasks uploadStateTasks) {
+        this.uploadStateTasks = uploadStateTasks;
+    }
 
-    UploadStates() {
+    public void initializeStates() {
+        log.info( "State Initialization started" );
+        try {
+            this.uploadRequestAccepted = new StateTemplate.Builder( false, UploadStateNames.UPLOAD_REQUEST_ACCEPTED )
+                    .successState( false, UploadStateNames.LOCK_EVENT_SENT_TO_KAFKA )
+                    .failureState( true, UploadStateNames.UPLOAD_REQUEST_REJECTED )
+                    .build();
 
-        this.uploadRequestAccepted = new StateTemplate.Builder( false, UploadStateNames.UPLOAD_REQUEST_ACCEPTED )
-                .successState( false, UploadStateNames.LOCK_EVENT_SENT_TO_KAFKA )
-                .failureState( true, UploadStateNames.UPLOAD_REQUEST_REJECTED )
-                .build();
+            this.uploadRequestRejected = uploadRequestAccepted.getFailureState();
 
-        this.uploadRequestRejected = uploadRequestAccepted.getFailureState();
-
-        // terminal builder is used to override the default taskToBeDoneInThisState
+            // terminal builder is used to override the default taskToBeDoneInThisState
 
 //        uploadRequestRejected = uploadRequestRejected.getTerminalStateBuilder()
 //                .taskToBeDoneInThisState( StringUtils::uncapitalize ).build();
 
 
-        this.lockEventSentToKafka = uploadRequestAccepted.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.LOCK_EVENT_RESULT_FROM_KAFKA )
-                .failureState( uploadRequestRejected )
-                .taskToBeDoneInThisState( uploadStateTasks::lockEventToKafka )
-                .build();
-
-        this.lockEventResultFromKafka = lockEventSentToKafka.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.S3_UPLOAD_AND_CACHE_TASK )
-                .failureState( uploadRequestRejected )
-                .taskToBeDoneInThisState( uploadStateTasks::consumeLockEventsFromLockServer )
-                .build();
-
-        this.s3UploadAndCache = lockEventResultFromKafka.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.ACCESS_MANAGEMENT_ENTRY_CREATE_EVENT_TO_KAFKA )
-                .failureState( false, UploadStateNames.UNLOCK_EVENT_TO_KAFKA_AFTER_FAILURE )
-                .taskToBeDoneInThisState( uploadStateTasks::uploadToS3AndRefreshCache )
-                .build();
+            this.lockEventSentToKafka = uploadRequestAccepted.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.LOCK_EVENT_RESULT_FROM_KAFKA )
+                    .failureState( uploadRequestRejected )
+                    .taskToBeDoneInThisState( uploadStateTasks::lockEventToKafka )
+                    .build();
 
 
-        this.unlockEventAfterFailure = s3UploadAndCache.getFailureStateBuilder()
-                .successState( false, UploadStateNames.UNLOCK_EVENT_RESULT_FROM_KAFKA_AFTER_FAILURE )
-                .failureState( true, UploadStateNames.ERROR )
-                .taskToBeDoneInThisState( uploadStateTasks::unLockEventToKafka )
-                .build();
+            this.lockEventResultFromKafka = lockEventSentToKafka.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.S3_UPLOAD_AND_CACHE_TASK )
+                    .failureState( uploadRequestRejected )
+                    .taskToBeDoneInThisState( uploadStateTasks::consumeLockEventsFromLockServer )
+                    .build();
 
-        this.error = unlockEventAfterFailure.getFailureState();
 
-        this.unlockEventResultAfterFailure = unlockEventAfterFailure.getSuccessStateBuilder()
-                .successState( uploadRequestRejected )
-                .failureState( error )
-                .taskToBeDoneInThisState( uploadStateTasks::consumeUnLockEventsFromLockServer )
-                .build();
+            this.s3UploadAndCache = lockEventResultFromKafka.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.ACCESS_MANAGEMENT_ENTRY_CREATE_EVENT_TO_KAFKA )
+                    .failureState( false, UploadStateNames.UNLOCK_EVENT_TO_KAFKA_AFTER_FAILURE )
+                    .taskToBeDoneInThisState( uploadStateTasks::uploadToS3AndRefreshCache )
+                    .build();
 
-        this.accessManagementEntryCreate = s3UploadAndCache.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.ACCESS_MANAGEMENT_ENTRY_CREATE_EVENT_RESULT_FROM_KAFKA )
-                .failureState( false, UploadStateNames.S3_DELETE_UPLOAD_AND_CACHE_TASK )
-                .taskToBeDoneInThisState( uploadStateTasks::accessManagementServiceCreateEntryEventToKafka )
-                .build();
 
-        this.s3DeleteUploadAndCache = accessManagementEntryCreate.getFailureStateBuilder()
-                .successState( unlockEventAfterFailure )
-                .failureState( error )
-                .taskToBeDoneInThisState( uploadStateTasks::deleteS3UploadAndCache )
-                .build();
+            this.unlockEventAfterFailure = s3UploadAndCache.getFailureStateBuilder()
+                    .successState( false, UploadStateNames.UNLOCK_EVENT_RESULT_FROM_KAFKA_AFTER_FAILURE )
+                    .failureState( true, UploadStateNames.ERROR )
+                    .taskToBeDoneInThisState( uploadStateTasks::unLockEventToKafka )
+                    .build();
 
-        this.accessManagementEntryCreateResult = accessManagementEntryCreate.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.UNLOCK_EVENT_TO_KAFKA_AFTER_SUCCESS )
-                .failureState( s3DeleteUploadAndCache )
-                .taskToBeDoneInThisState( uploadStateTasks::consumeCreateEventsFromAccessManagementServer )
-                .build();
 
-        // bypass state
+            this.error = unlockEventAfterFailure.getFailureState();
 
-        this.unlockEventAfterSuccess = accessManagementEntryCreateResult.getSuccessStateBuilder()
-                .successState( false, UploadStateNames.UNLOCK_EVENT_RESULT_FROM_KAFKA_AFTER_SUCCESS )
-                .failureState( true, UploadStateNames.COMPLETED )
-                .taskToBeDoneInThisState( uploadStateTasks::unLockEventToKafka )
-                .build();
+            this.unlockEventResultAfterFailure = unlockEventAfterFailure.getSuccessStateBuilder()
+                    .successState( uploadRequestRejected )
+                    .failureState( error )
+                    .taskToBeDoneInThisState( uploadStateTasks::consumeUnLockEventsFromLockServer )
+                    .build();
 
-        this.completed = unlockEventAfterSuccess.getFailureState();
 
-        this.unlockEventResultAfterSuccess = unlockEventAfterSuccess.getSuccessStateBuilder()
-                .successState( completed )
-                .failureState( completed )
-                .taskToBeDoneInThisState( uploadStateTasks::consumeUnLockEventsFromLockServer )
-                .build();
+            this.accessManagementEntryCreate = s3UploadAndCache.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.ACCESS_MANAGEMENT_ENTRY_CREATE_EVENT_RESULT_FROM_KAFKA )
+                    .failureState( false, UploadStateNames.S3_DELETE_UPLOAD_AND_CACHE_TASK )
+                    .taskToBeDoneInThisState( uploadStateTasks::accessManagementServiceCreateEntryEventToKafka )
+                    .build();
+
+            this.s3DeleteUploadAndCache = accessManagementEntryCreate.getFailureStateBuilder()
+                    .successState( unlockEventAfterFailure )
+                    .failureState( error )
+                    .taskToBeDoneInThisState( uploadStateTasks::deleteS3UploadAndCache )
+                    .build();
+
+
+            this.accessManagementEntryCreateResult = accessManagementEntryCreate.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.UNLOCK_EVENT_TO_KAFKA_AFTER_SUCCESS )
+                    .failureState( s3DeleteUploadAndCache )
+                    .taskToBeDoneInThisState( uploadStateTasks::consumeCreateEventsFromAccessManagementServer )
+                    .build();
+
+            // bypass state
+
+
+            this.unlockEventAfterSuccess = accessManagementEntryCreateResult.getSuccessStateBuilder()
+                    .successState( false, UploadStateNames.UNLOCK_EVENT_RESULT_FROM_KAFKA_AFTER_SUCCESS )
+                    .failureState( true, UploadStateNames.COMPLETED )
+                    .taskToBeDoneInThisState( uploadStateTasks::unLockEventToKafka )
+                    .build();
+
+            this.completed = unlockEventAfterSuccess.getFailureState();
+
+            this.unlockEventResultAfterSuccess = unlockEventAfterSuccess.getSuccessStateBuilder()
+                    .successState( completed )
+                    .failureState( completed )
+                    .taskToBeDoneInThisState( uploadStateTasks::consumeUnLockEventsFromLockServer )
+                    .build();
+
+
+            log.info( "State Initialization completed" );
+        } catch (Exception e) {
+            log.error( "Exception while initializing states " + e );
+        }
 
     }
 
@@ -176,6 +196,8 @@ public class UploadStates {
     }
 
     public StateTemplate getUploadStateByName(UploadStateNames name) {
+
+        System.out.println( name );
 
         switch (name) {
             case UPLOAD_REQUEST_ACCEPTED:

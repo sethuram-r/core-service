@@ -1,8 +1,10 @@
 package smarshare.coreservice.read.model.filestructure;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 
+@EqualsAndHashCode(callSuper = true)
 public @Data
 class FileComponent extends BucketComponent {
 

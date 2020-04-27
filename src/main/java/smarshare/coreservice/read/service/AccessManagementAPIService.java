@@ -32,10 +32,13 @@ public class AccessManagementAPIService {
                 .port( accessManagementServerConfiguration.getPort() );
     }
 
-    public List<BucketMetadata> getAllBucketsMetaDataByUserName(String userName) {
+    public List<BucketMetadata> getAllBucketsMetaDataByUserNameAndEmail(String userName, String email) {
         log.info( "Inside getAllBucketsMetaDataByUserName" );
         try {
-            UriComponents url = accessServerUrl.replacePath( "buckets/accessInfo" ).replaceQueryParam( "userName", userName ).build();
+            UriComponents url = accessServerUrl.replacePath( "buckets/accessInfo" )
+                    .replaceQueryParam( "userName", userName )
+                    .replaceQueryParam( "email", email )
+                    .build();
             BucketsMetadata accessDetailsForBucketsOfGivenUser = restTemplate.getForObject( url.toUriString(), BucketsMetadata.class );
             System.out.println( "accessDetailsForBucketsOfGivenUser--------->" + accessDetailsForBucketsOfGivenUser );
             return accessDetailsForBucketsOfGivenUser.getBucketsMetadata();

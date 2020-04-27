@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import smarshare.coreservice.write.exception.BucketExistException;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.UploadObject;
 
@@ -37,19 +36,24 @@ public class S3WriteService {
         this.transferManager = transferManager;
     }
 
+
+    public Boolean doesBucketExist(String bucketName) {
+        log.info( "Inside doesBucketExist in S3Service" );
+        return amazonS3Client.doesBucketExistV2( bucketName );
+    }
+
     public Boolean createBucket(Bucket bucket) {
         try {
             log.info( "Inside createBucket in S3Service" );
-            if (amazonS3Client.doesBucketExistV2( bucket.getBucketName() )) {
-                throw new BucketExistException( bucket.getBucketName() + " already exists in S3 Global Namespace! Choose Another Bucket Name" );
-            } else {
-                CreateBucketRequest createBucketRequest = new CreateBucketRequest( bucket.getBucketName(), "eu-west-1" )
-                        .withCannedAcl( CannedAccessControlList.BucketOwnerFullControl );
-                amazonS3Client.createBucket( createBucketRequest );
-                return Boolean.TRUE;
-            }
+
+            CreateBucketRequest createBucketRequest = new CreateBucketRequest( bucket.getBucketName(), "eu-west-1" )
+                    .withCannedAcl( CannedAccessControlList.BucketOwnerFullControl );
+            final com.amazonaws.services.s3.model.Bucket createdBucket = amazonS3Client.createBucket( createBucketRequest );
+            System.out.println( "createdBucket------->" + createdBucket );
+            return Boolean.TRUE;
+
         } catch (AmazonS3Exception e) {
-            log.error( e.getErrorMessage() );
+            log.error( e.getMessage() );
         }
         return Boolean.FALSE;
     }
@@ -158,6 +162,15 @@ public class S3WriteService {
             log.error( String.format( "Exception occurred while uploading %s", e ) );
         }
         return Boolean.FALSE;
+    }
+
+    public List<S3ObjectSummary> listObjectsByPrefix(String objectName, String bucketName) {
+
+        ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
+                .withBucketName( bucketName )
+                .withPrefix( objectName );
+        return amazonS3Client.listObjectsV2( listObjectsRequest ).getObjectSummaries();
+
     }
 
 

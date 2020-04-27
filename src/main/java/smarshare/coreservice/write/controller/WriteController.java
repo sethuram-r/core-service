@@ -3,13 +3,16 @@ package smarshare.coreservice.write.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import smarshare.coreservice.write.dto.DeleteObjectRequest;
+import smarshare.coreservice.write.dto.CustomResponse;
 import smarshare.coreservice.write.dto.DeleteObjectsRequest;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.UploadObject;
 import smarshare.coreservice.write.service.BucketObjectService;
 import smarshare.coreservice.write.service.BucketService;
+import smarshare.coreservice.write.service.SagaBucketObjectUploadService;
 
 import java.util.List;
 
@@ -22,20 +25,25 @@ public class WriteController {
 
     private BucketObjectService bucketObjectService;
     private BucketService bucketService;
+    private SagaBucketObjectUploadService sagaBucketObjectUploadService;
 
 
     @Autowired
-    WriteController(BucketObjectService bucketObjectService, BucketService bucketService) {
+    WriteController(BucketObjectService bucketObjectService, BucketService bucketService, SagaBucketObjectUploadService sagaBucketObjectUploadService) {
         this.bucketObjectService = bucketObjectService;
         this.bucketService = bucketService;
+        this.sagaBucketObjectUploadService = sagaBucketObjectUploadService;
     }
 
 
     @PostMapping(value = "bucket")
-    public Boolean createBucket(@RequestBody Bucket bucket) {
+    public ResponseEntity createBucket(@RequestBody Bucket bucket) {
         log.info( "Inside createBucket" );
-        return bucketService.createBucket( bucket );
-
+        final CustomResponse createBucketResult = bucketService.createBucket( bucket );
+        System.out.println( "createBucketResult --->" + createBucketResult.toString() );
+        if (Boolean.FALSE.equals( createBucketResult.getOperationResult() ) && null != createBucketResult.getErrorMessage()) {
+            return new ResponseEntity<>( HttpStatus.PRECONDITION_FAILED );
+        } else return ResponseEntity.ok( true );
     }
 
     @DeleteMapping(value = "bucket")
@@ -54,11 +62,13 @@ public class WriteController {
 
     //objectName is always complete name without bucketName
     @DeleteMapping(value = "file")
-    public Boolean deleteFile(@RequestBody DeleteObjectRequest deleteObjectRequest) {
+    public Boolean deleteFile(@RequestParam("objectName") String objectName,
+                              @RequestParam("bucketName") String bucketName,
+                              @RequestParam("ownerName") String ownerName) {
         log.info( "Inside deleteFile" );
-        return bucketObjectService.deleteObject( deleteObjectRequest.getObjectName(),
-                deleteObjectRequest.getBucketName(),
-                deleteObjectRequest.getOwnerName() );
+        return bucketObjectService.deleteObject( objectName,
+                bucketName,
+                ownerName );
     }
 
     @DeleteMapping(value = "folder")
@@ -69,9 +79,9 @@ public class WriteController {
 
 
     @PostMapping(value = "object")
-    public Boolean uploadObject(@RequestBody List<UploadObject> filesToUpload) {
+    public ResponseEntity<Boolean> uploadObject(@RequestBody List<UploadObject> filesToUpload) {
         log.info( "Inside uploadFile " );
-        return bucketObjectService.UploadObjectThroughSaga( filesToUpload );
+        return sagaBucketObjectUploadService.UploadObjectThroughSaga( filesToUpload );
     }
 
 

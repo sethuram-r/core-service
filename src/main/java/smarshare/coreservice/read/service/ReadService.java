@@ -1,7 +1,6 @@
 package smarshare.coreservice.read.service;
 
 import com.amazonaws.services.s3.model.S3Object;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -18,10 +17,7 @@ import smarshare.coreservice.read.service.helper.CacheInsertionThread;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,7 +26,6 @@ import java.util.stream.Collectors;
 public class ReadService {
 
     private S3ReadService s3ReadService;
-    private ObjectMapper jsonConverter;
     private List<Bucket> bucketList = null;
     private LockServerAPIService lockServerAPIService;
     private AccessManagementAPIService accessManagementAPIService;
@@ -38,10 +33,9 @@ public class ReadService {
 
 
     @Autowired
-    ReadService(S3ReadService s3ReadService, ObjectMapper jsonConverter, CacheManager cacheManager,
+    ReadService(S3ReadService s3ReadService, CacheManager cacheManager,
                 LockServerAPIService lockServerAPIService, AccessManagementAPIService accessManagementAPIService) {
         this.s3ReadService = s3ReadService;
-        this.jsonConverter = jsonConverter;
         this.lockServerAPIService = lockServerAPIService;
         this.accessManagementAPIService = accessManagementAPIService;
         this.cacheManager = cacheManager;
@@ -50,23 +44,27 @@ public class ReadService {
 
     private List<Bucket> getBucketListFromS3() {
         log.info( "Inside getBucketListFromS3" );
-        if (bucketList == null){
+        if (bucketList == null) {
             return s3ReadService.listBuckets();
         }
         return bucketList;
     }
 
-    public List<Bucket> getBucketsByUserName(String userName) {
-        log.info( "Inside getBucketListFromSpecificUser" );
+    public List<Bucket> getBucketsByUserNameAndEmail(String userName, String email) {
+        log.info( "Inside getBucketsByUserNameAndEmail" );
         List<Bucket> bucketsInS3 = getBucketListFromS3();
-        Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserName( userName ).stream()
+        Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserNameAndEmail( userName, email ).stream()
                 .collect( Collectors.toMap( BucketMetadata::getBucketName, Function.identity() ) );
         if (!bucketsInS3.isEmpty() && !bucketsMetadata.isEmpty()) {
-            bucketsInS3.forEach( bucket -> bucket.setAccess( bucketsMetadata.get( bucket.getName() ) ) );
+            System.out.println( "bucketsInS3---->" + bucketsInS3.toString() );
+            System.out.println( "bucketsMetadata---->" + bucketsMetadata.toString() );
+
+            bucketsInS3.forEach( bucket -> {
+                if (bucketsMetadata.containsKey( bucket.getName() ))
+                    bucket.setAccess( bucketsMetadata.get( bucket.getName() ) );
+            } );
         }
-//        System.out.println("bucketsInS3----->"+bucketsInS3 );
-//        System.out.println("bucketsMetadata----->"+bucketsMetadata );
-//        System.out.println( "Buckets with Access ------>" + bucketsInS3 );
+        System.out.println( "bucketsInS3----->" + bucketsInS3.toString() );
         return bucketsInS3;
     }
 
@@ -99,7 +97,8 @@ public class ReadService {
                 return new S3DownloadedObject( objectName, bucketName, convertCachedFileToBASE64DecodedMultipartFile( cachedObject ).getResource() );
             } else {
                 log.info( "Requested Resource Doesn't Exist in Cache" );
-                if (!lockServerAPIService.getLockStatusForGivenObject( objectName )) {
+                // if (!lockServerAPIService.getLockStatusForGivenObject( objectName )) {
+                if (Boolean.FALSE.equals( lockServerAPIService.getLockStatusForGivenObject( objectName ) )) {
                     BASE64DecodedMultipartFile downloadedObjectInMultipartFile = convertRawS3ObjectIntoBase64( Objects.requireNonNull( s3ReadService.getObject( objectName, bucketName ) ) );
                     S3DownloadedObject s3DownloadedObject = new S3DownloadedObject( objectName, bucketName, downloadedObjectInMultipartFile.getResource() );
                     CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( cacheManager, new DownloadedCacheObject( objectName, bucketName, Objects.requireNonNull( downloadedObjectInMultipartFile ) ) );
@@ -138,16 +137,18 @@ public class ReadService {
     public List<DownloadedObject> downloadFolder(DownloadFolderRequest objectsToBeDownloaded) {
         log.info( "Inside downloadFolder" );
         try {
-            if (!lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() )) {
+            // change based on sonar lint
+            // if (!lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() )) {
+            if (Boolean.FALSE.equals( lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() ) )) {
                 return objectsToBeDownloaded.getObjectsToBeDownloaded().stream()
 //                        .filter( s3DownloadObject -> !s3DownloadObject.getObjectName().endsWith( "/" ) ) not needed
                         .map( s3DownloadObject -> Objects.requireNonNull( downloadFileInBase64( s3DownloadObject ) ) )
                         .collect( Collectors.toList() );
             }
         } catch (Exception e) {
-
+            log.error( "Exception while downloadFolder" + e.getMessage() + e.getCause() );
         }
-        return null;
+        return Collections.emptyList();
     }
 
 

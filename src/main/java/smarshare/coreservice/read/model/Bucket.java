@@ -9,7 +9,7 @@ public @Data
 class Bucket {
 
     private String name;
-    private BucketAccess access;
+    private BucketAccess access = new BucketAccess();
 
     public Bucket(String name) {
         this.name = name;

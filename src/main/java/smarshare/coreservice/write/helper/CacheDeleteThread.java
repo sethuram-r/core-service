@@ -1,7 +1,6 @@
 package smarshare.coreservice.write.helper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import smarshare.coreservice.cache.model.CacheManager;
 
 
@@ -9,13 +8,13 @@ import smarshare.coreservice.cache.model.CacheManager;
 public class CacheDeleteThread implements Runnable {
 
     public Thread thread;
-    @Autowired
     CacheManager cacheManager;
     private String fileToBeDeletedFromCache;
 
-    public CacheDeleteThread(String fileToBeDeletedFromCache) {
+    public CacheDeleteThread(String fileToBeDeletedFromCache, CacheManager cacheManager) {
         thread = new Thread( this, "Cache Delete Thread" );
         this.fileToBeDeletedFromCache = fileToBeDeletedFromCache;
+        this.cacheManager = cacheManager;
 
     }
 

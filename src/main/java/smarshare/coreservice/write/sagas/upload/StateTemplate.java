@@ -67,9 +67,10 @@ public class StateTemplate {
             if (this.isTerminalState && null == this.taskToBeDoneInThisState) {
                 return taskInput.setRecentSuccessfulState( getCurrentStateName() );
             } else {
-                if (null == this.taskToBeDoneInThisState)
+                if (null == this.taskToBeDoneInThisState) {
+                    this.nextState = (null != getSuccessState()) ? getSuccessState().currentStateName : null;
                     return taskInput.setRecentSuccessfulState( getCurrentStateName() );
-                else {
+                } else {
                     if (this.taskToBeDoneInThisState.apply( taskInput )) {
                         this.nextState = (null != getSuccessState()) ? getSuccessState().currentStateName : null;
                         return taskInput.setRecentSuccessfulState( getCurrentStateName() );

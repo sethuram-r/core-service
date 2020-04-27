@@ -22,19 +22,20 @@ public class KafkaConsumerConfiguration {
         this.configurationProperties = new HashMap<>();
         configurationProperties.put( ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092" );
         configurationProperties.put( ConsumerConfig.GROUP_ID_CONFIG, "sagaConsumer" );
+        configurationProperties.put( ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true );
         configurationProperties.put( ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class );
         configurationProperties.put( ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class );
     }
 
 
-    @Bean
+    @Bean(name = "kafkaLockConsumer")
     public KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer() {
-        return new KafkaConsumer<>( configurationProperties, new StringDeserializer(), new JsonDeserializer<>( SagaEventLockWrapper.class ) );
+        return new KafkaConsumer<>( configurationProperties, new StringDeserializer(), new JsonDeserializer<>( SagaEventLockWrapper.class, false ) );
     }
 
-    @Bean
+    @Bean(name = "kafkaAccessManagementConsumer")
     public KafkaConsumer<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementConsumer() {
-        return new KafkaConsumer<>( configurationProperties, new StringDeserializer(), new JsonDeserializer<>( SagaEventAccessManagementServiceWrapper.class ) );
+        return new KafkaConsumer<>( configurationProperties, new StringDeserializer(), new JsonDeserializer<>( SagaEventAccessManagementServiceWrapper.class, false ) );
     }
 
 }
