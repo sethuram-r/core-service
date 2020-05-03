@@ -6,6 +6,7 @@ public abstract class BucketComponent {
 
     String name;
     String owner;
+    int ownerId;
     AccessInfo accessInfo;
     String completeName;
     String lastModified;
@@ -20,6 +21,10 @@ public abstract class BucketComponent {
 
     public String getOwner() {
         return owner;
+    }
+
+    public int getOwnerId() {
+        return ownerId;
     }
 
     public String getCompleteName() {

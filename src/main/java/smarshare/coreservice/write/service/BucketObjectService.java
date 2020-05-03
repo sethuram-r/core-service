@@ -67,10 +67,12 @@ public class BucketObjectService {
                 bucketObjectForEvent.setBucketName( emptyFolder.getBucketName() );
                 bucketObjectForEvent.setObjectName( emptyFolder.getObjectName() );
                 bucketObjectForEvent.setOwnerName( emptyFolder.getOwner() );
+                bucketObjectForEvent.setOwnerId( emptyFolder.getOwnerId() );
+                bucketObjectForEvent.setUserId( emptyFolder.getOwnerId() );
                 bucketObjectForEvent.setUserName( emptyFolder.getOwner() );
                 System.out.println( Arrays.toString( Collections.singletonList( bucketObjectForEvent ).toArray() ) );
-                System.out.println( Collections.singletonList( bucketObjectForEvent ) );
-                kafkaTemplate.send( "BucketObjectAccessManagement", "emptyBucketObject", jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectForEvent ) ) );
+                String stringConverted = jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectForEvent ) );
+                kafkaTemplate.send( "BucketObjectAccessManagement", "emptyBucketObject", stringConverted );
             }
         } catch (JsonProcessingException e) {
             log.error( "Exception while publishing createEmptyFolder event " + e.getMessage() );
@@ -87,21 +89,23 @@ public class BucketObjectService {
         }
     }
 
-    private BucketObjectEvent mapBucketObjectToBucketObjectEvent(String objectName, String bucketName, String ownerName) {
+    private BucketObjectEvent mapBucketObjectToBucketObjectEvent(String objectName, String bucketName, int ownerId) {
         BucketObjectEvent bucketObjectDeleteEvent = new BucketObjectEvent();
         bucketObjectDeleteEvent.setBucketName( bucketName );
         bucketObjectDeleteEvent.setObjectName( objectName );
-        bucketObjectDeleteEvent.setOwnerName( ownerName );
+        bucketObjectDeleteEvent.setOwnerId( ownerId );
         return bucketObjectDeleteEvent;
     }
 
-    public Boolean deleteObject(String objectName, String bucketName, String ownerName) {
-        log.info( "Inside deleteFileInStorage" );
+    public Boolean deleteObject(String objectName, String bucketName, int ownerId) {
+        log.info( "Inside deleteObject" );
         try {
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock1", "object", jsonConverter.writeValueAsString( new S3Object( bucketName + "/" + objectName ) ) );
+            final String lockEventObjects = jsonConverter.writeValueAsString( new S3Object( bucketName + "/" + objectName ) );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock2", "object", lockEventObjects );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
                 if (s3WriteService.deleteObject( objectName, bucketName )) {
-                    BucketObjectEvent bucketObjectDeleteEvent = mapBucketObjectToBucketObjectEvent( objectName, bucketName, ownerName );
+                    BucketObjectEvent bucketObjectDeleteEvent = mapBucketObjectToBucketObjectEvent( objectName, bucketName, ownerId );
+                    System.out.println( " bucketObjectDeleteEvent---->" + bucketObjectDeleteEvent.toString() );
                     kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectDeleteEvent ) ) );
                     deleteObjectInCache( bucketName + "/" + objectName );
                     return true;
@@ -114,17 +118,6 @@ public class BucketObjectService {
         return false;
     }
 
-    private List<DeleteObjectRequest> getObjectsByPrefix(String objectName, String bucketName) {
-        return s3WriteService.listObjectsByPrefix( objectName, bucketName ).stream()
-                .map( s3ObjectSummary -> {
-                    DeleteObjectRequest deleteObjectsRequest = new DeleteObjectRequest();
-                    deleteObjectsRequest.setObjectName( s3ObjectSummary.getKey() );
-                    deleteObjectsRequest.setBucketName( bucketName );
-                    deleteObjectsRequest.setOwnerName( s3ObjectSummary.getOwner().getDisplayName() );
-                    return deleteObjectsRequest;
-                } ).collect( Collectors.toList() );
-
-    }
 
     public Boolean deleteFolderInStorage(DeleteObjectsRequest deleteObjectsRequest) {
         log.info( "Inside deleteFolderInStorage" );
@@ -134,8 +127,8 @@ public class BucketObjectService {
             List<S3Object> objectsToBeLocked = deleteObjectsRequest.getFolderObjects().stream()
                     .map( deleteObjectRequest -> new S3Object( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) )
                     .collect( Collectors.toList() );
-
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock1", "objects", jsonConverter.writeValueAsString( objectsToBeLocked ) );
+            final String lockEventObjects = jsonConverter.writeValueAsString( objectsToBeLocked );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock2", "objects", lockEventObjects );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
 
                 List<String> objectNames = deleteObjectsRequest.getFolderObjects().stream()
@@ -148,9 +141,10 @@ public class BucketObjectService {
                             .map( deleteObjectRequest -> mapBucketObjectToBucketObjectEvent(
                                     deleteObjectRequest.getObjectName(),
                                     deleteObjectRequest.getBucketName(),
-                                    deleteObjectRequest.getOwnerName() )
+                                    deleteObjectRequest.getOwnerId() )
                             )
                             .collect( Collectors.toList() );
+                    System.out.println( "bucketObjectsForDeleteEvent--->" + bucketObjectsForDeleteEvent );
                     kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectsForDeleteEvent ) );
                     deleteObjectsRequest.getFolderObjects().forEach( deleteObjectRequest -> deleteObjectInCache( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) );
                     return true;

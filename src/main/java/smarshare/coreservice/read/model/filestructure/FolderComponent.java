@@ -11,17 +11,16 @@ import java.util.List;
      @JsonProperty(value = "children")
      List<BucketComponent> bucketComponents = new ArrayList<>(  );
 
-    public FolderComponent(String name, AccessInfo accessInfo, String owner, String completeName){
+    public FolderComponent(String name, AccessInfo accessInfo, String owner, int ownerId, String completeName) {
         this.name = name;
         this.accessInfo = accessInfo;
         this.owner = owner;
+        this.ownerId = ownerId;
         this.completeName = completeName;
     }
 
 
     public BucketComponent add (BucketComponent file){
-        file.owner = this.owner;
-        if (file.accessInfo == null) file.accessInfo = this.accessInfo;
         bucketComponents.add( file );
         return file;
     }

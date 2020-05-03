@@ -50,9 +50,6 @@ public class UploadStateTasks {
     }
 
 
-    /// Have to implement kafka producer in lock server for kafka result of state machines
-
-
     private Boolean sendEventToLockServer(SagaEventLockWrapper objectsToBeLocked, KafkaConstants eventName) {
 
         log.info( "Inside sendEventToLockServer" );

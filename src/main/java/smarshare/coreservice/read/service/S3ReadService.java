@@ -38,7 +38,7 @@ public class S3ReadService {
         this.accessManagementAPIService = accessManagementAPIService;
     }
 
-    public List<Bucket> listBuckets(){
+    public List<Bucket> listBuckets() {
         log.info( "Inside listBuckets" );
         List<com.amazonaws.services.s3.model.Bucket> rawBucketListFromS3 = amazonS3Client.listBuckets();
         return rawBucketListFromS3.stream()
@@ -47,8 +47,8 @@ public class S3ReadService {
     }
 
 
-    private Map<String, ObjectMetadata> getObjectMetaData(String bucketName, String userName) {
-        return accessManagementAPIService.getAllBucketObjectMetadataByBucketNameAndUserName( bucketName, userName );
+    private Map<String, ObjectMetadata> getObjectMetaData(String bucketName, int userId) {
+        return accessManagementAPIService.getAllBucketObjectMetadataByBucketNameAndUserId( bucketName, userId );
     }
 
     private Map<String, String> getObjectKeys(String bucketName) {
@@ -61,15 +61,17 @@ public class S3ReadService {
                         LinkedHashMap::new )
                 );
 
-        System.out.println( collect.toString() );
+        System.out.println( "0------->" + collect.toString() );
 
         return collect;
     }
 
-    public String listObjectsWithMetadata(String userName, String bucketName) {
+    public String listObjectsWithMetadata(int userId, String bucketName) {
         log.info( "Inside listObjectsWithMetadata" );
         try {
-            FolderComponent completeFileStructure = bucketObjectsHelper.convertKeysInFileStructureFormat( getObjectKeys( bucketName ), bucketName, getObjectMetaData( bucketName, userName ) );
+            Map<String, ObjectMetadata> objectsMetadata = getObjectMetaData( bucketName, userId );
+            System.out.println( "objectsMetadata------------>" + objectsMetadata );
+            FolderComponent completeFileStructure = bucketObjectsHelper.convertKeysInFileStructureFormat( getObjectKeys( bucketName ), bucketName, objectsMetadata );
             return objectToJsonConverter.writeValueAsString( completeFileStructure );
         } catch (Exception e) {
             log.error( "Exception while converting file structure into JSON " + e.getMessage() );

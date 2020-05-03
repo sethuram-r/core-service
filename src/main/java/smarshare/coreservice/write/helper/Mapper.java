@@ -11,6 +11,8 @@ public class Mapper {
         bucketObjectEvent.setObjectName( uploadObject.getObjectName() );
         bucketObjectEvent.setOwnerName( uploadObject.getOwner() );
         bucketObjectEvent.setUserName( uploadObject.getOwner() );
+        bucketObjectEvent.setOwnerId( uploadObject.getOwnerId() );
+        bucketObjectEvent.setUserId( uploadObject.getOwnerId() );
         return bucketObjectEvent;
     }
 }

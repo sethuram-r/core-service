@@ -23,6 +23,7 @@ public class KafkaConsumerConfiguration {
         configurationProperties.put( ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092" );
         configurationProperties.put( ConsumerConfig.GROUP_ID_CONFIG, "sagaConsumer" );
         configurationProperties.put( ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true );
+        configurationProperties.put( ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 300 );
         configurationProperties.put( ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class );
         configurationProperties.put( ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class );
     }

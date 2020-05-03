@@ -7,6 +7,7 @@ public @Data
 class ObjectMetadata {
 
     private String ownerName;
+    private int ownerId;
     private AccessingUserInfoForApi accessingUserInfo;
 
 }

@@ -64,11 +64,11 @@ public class WriteController {
     @DeleteMapping(value = "file")
     public Boolean deleteFile(@RequestParam("objectName") String objectName,
                               @RequestParam("bucketName") String bucketName,
-                              @RequestParam("ownerName") String ownerName) {
+                              @RequestParam("ownerId") int ownerId) {
         log.info( "Inside deleteFile" );
         return bucketObjectService.deleteObject( objectName,
                 bucketName,
-                ownerName );
+                ownerId );
     }
 
     @DeleteMapping(value = "folder")

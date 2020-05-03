@@ -32,9 +32,9 @@ public class ReadController {
     }
 
     @GetMapping(value = "objects")
-    public String listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userName") String userName, @RequestParam("bucketName") String bucketName) {
+    public String listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userId") int userId, @RequestParam("bucketName") String bucketName) {
         log.info( "Inside listFilesAndFoldersForIndividualUserForParticularBucket" );
-        return readService.getFilesAndFoldersByUserNameAndBucketName( userName, bucketName );
+        return readService.getFilesAndFoldersByUserIdAndBucketName( userId, bucketName );
     }
 
     @GetMapping(value = "file/download")

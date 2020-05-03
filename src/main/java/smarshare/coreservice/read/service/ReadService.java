@@ -69,9 +69,9 @@ public class ReadService {
     }
 
 
-    public String getFilesAndFoldersByUserNameAndBucketName(String userName, String bucketName) {
+    public String getFilesAndFoldersByUserIdAndBucketName(int userId, String bucketName) {
         log.info( "Inside getFilesAndFoldersByUserAndBucket" );
-        return s3ReadService.listObjectsWithMetadata( userName, bucketName );
+        return s3ReadService.listObjectsWithMetadata( userId, bucketName );
     }
 
     private FileToBeCached getCachedObject(String objectName, String bucketName) {

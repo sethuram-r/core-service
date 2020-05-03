@@ -49,10 +49,10 @@ public class AccessManagementAPIService {
     }
 
 
-    public Map<String, ObjectMetadata> getAllBucketObjectMetadataByBucketNameAndUserName(String bucketName, String userName) {
+    public Map<String, ObjectMetadata> getAllBucketObjectMetadataByBucketNameAndUserId(String bucketName, int userId) {
         log.info( "Inside getAllBucketObjectMetadataByBucketNameAndUserName" );
         try {
-            UriComponents url = accessServerUrl.replacePath( "objects/accessInfo" ).replaceQueryParam( "userName", userName )
+            UriComponents url = accessServerUrl.replacePath( "objects/accessInfo" ).replaceQueryParam( "userId", userId )
                     .replaceQueryParam( "bucketName", bucketName ).build();
             return Objects.requireNonNull( restTemplate.getForObject( url.toUriString(), BucketObjectsMetadata.class ) ).getBucketObjectsMetadata().stream()
                     .collect( Collectors.toMap( BucketObjectMetadata::getObjectName, BucketObjectMetadata::getObjectMetadata ) );

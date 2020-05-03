@@ -8,5 +8,5 @@ class DeleteObjectRequest {
 
     private String objectName;
     private String bucketName;
-    private String ownerName;
+    private int ownerId;
 }

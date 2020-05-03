@@ -21,14 +21,16 @@ public class BucketObjectsHelper {
     private FolderComponent fileStructureConverter(Map<String, String> extractedKeys, String bucketName, Map<String, ObjectMetadata> objectMetadata) {
         log.info( "Inside fileStructureConverter" );
 
+
         // Forming the root node
 
-        FolderComponent root = new FolderComponent( bucketName, null, "", "/" );
+        FolderComponent root = new FolderComponent( bucketName, null, "", 0, "/" );
         FolderComponent previousFolder = root;
         for (Map.Entry<String, String> extractedKey : extractedKeys.entrySet()) {
 
             AccessInfo currentKeyAccessInfo = null;
             String owner = "";
+            int ownerId = 0;
 
             // fetching access details needed for forming the tree
 
@@ -37,11 +39,12 @@ public class BucketObjectsHelper {
                 if (null != currentObjectMetadata.getAccessingUserInfo())
                     currentKeyAccessInfo = new AccessInfo( currentObjectMetadata.getAccessingUserInfo() );
                 owner = currentObjectMetadata.getOwnerName();
+                ownerId = currentObjectMetadata.getOwnerId();
             }
 
             // file in root folder
             if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches() && (!extractedKey.getKey().contains( "/" ))) {
-                root.add( new FileComponent( extractedKey.getKey(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
+                root.add( new FileComponent( extractedKey.getKey(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
             }
 
             //only folders and files within folders are allowed
@@ -49,17 +52,17 @@ public class BucketObjectsHelper {
 
                 //first level of folder
                 if (extractedKey.getKey().endsWith( "/" ) && (previousFolder.getName().equals( bucketName ) || !extractedKey.getKey().contains( previousFolder.getName() + "/" ))) {
-                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.getKey().replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey() ) );
+                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.getKey().replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey() ) );
                 } else // sub level in folders
                     if (extractedKey.getKey().endsWith( "/" ) && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
-                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey() ) );
+                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey() ) );
                     } else //file in sub level folders
                         if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches() && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
-                            previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
+                            previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
                         }
             } else {
                 //file without extensions
-                previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, extractedKey.getKey(), extractedKey.getValue() ) );
+                previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
             }
         }
         return root;
