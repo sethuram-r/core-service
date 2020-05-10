@@ -90,9 +90,9 @@ public class CacheManager {
     }
 
     private void refreshCache() {
-        System.out.println( "Before Refreshing Cache Size is " + this.cacheContainer.size() );
+        log.info( "Before Refreshing Cache Size is " + this.cacheContainer.size() );
         if (didCacheContainerReachedThreshold()) cacheReplace();
-        System.out.println( "After Refreshing Cache Size is " + this.cacheContainer.size() );
+        log.info( "After Refreshing Cache Size is " + this.cacheContainer.size() );
     }
 
     public Boolean createNewCacheEntry(FileToBeCached fileToBeCached) {
@@ -100,9 +100,8 @@ public class CacheManager {
         log.info( "Inside createNewCacheEntry" );
 
         refreshCache();
-
         boolean IsCacheEntryDone = cacheContainer.add( new CacheEntry( fileToBeCached, 1, 1 ) );
-        System.out.println( "IsCacheEntryDone----------> " + IsCacheEntryDone );
+        log.info( "IsCacheEntryDone----------> " + IsCacheEntryDone );
         if (IsCacheEntryDone)
             return fileDirectoryManger.createFileInCache( fileToBeCached ) ? Boolean.TRUE : Boolean.FALSE;
         return Boolean.FALSE;

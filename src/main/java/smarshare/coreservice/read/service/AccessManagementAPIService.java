@@ -32,15 +32,14 @@ public class AccessManagementAPIService {
                 .port( accessManagementServerConfiguration.getPort() );
     }
 
-    public List<BucketMetadata> getAllBucketsMetaDataByUserNameAndEmail(String userName, String email) {
+    public List<BucketMetadata> getAllBucketsMetaDataByUserId(int userId) {
         log.info( "Inside getAllBucketsMetaDataByUserName" );
         try {
             UriComponents url = accessServerUrl.replacePath( "buckets/accessInfo" )
-                    .replaceQueryParam( "userName", userName )
-                    .replaceQueryParam( "email", email )
+                    .replaceQueryParam( "userId", userId )
                     .build();
             BucketsMetadata accessDetailsForBucketsOfGivenUser = restTemplate.getForObject( url.toUriString(), BucketsMetadata.class );
-            System.out.println( "accessDetailsForBucketsOfGivenUser--------->" + accessDetailsForBucketsOfGivenUser );
+
             return accessDetailsForBucketsOfGivenUser.getBucketsMetadata();
         } catch (Exception e) {
             log.error( "Exception while getAllBucketsMetaDataByUserName " + e );
@@ -61,6 +60,21 @@ public class AccessManagementAPIService {
         }
 
         return Collections.emptyMap();
+    }
+
+    public Boolean doesAccessExist(int userId, String bucketName, String accessType) {
+        log.info( "Inside getAllBucketObjectMetadataByBucketNameAndUserName" );
+        try {
+            UriComponents url = accessServerUrl.replacePath( "doesAccessExist" )
+                    .replaceQueryParam( "userId", userId )
+                    .replaceQueryParam( "bucketName", bucketName )
+                    .replaceQueryParam( "accessType", accessType )
+                    .build();
+            return restTemplate.getForObject( url.toUriString(), Boolean.class );
+        } catch (Exception e) {
+            log.error( "Exception while doesAccessExist " + e );
+        }
+        return false;
     }
 
 }

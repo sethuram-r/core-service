@@ -28,7 +28,6 @@ public class S3ReadService {
     private AccessManagementAPIService accessManagementAPIService;
 
 
-
     @Autowired
     S3ReadService(AmazonS3 amazonS3Client, BucketObjectsHelper bucketObjectsHelper,
                   ObjectMapper objectToJsonConverter, AccessManagementAPIService accessManagementAPIService) {
@@ -53,15 +52,15 @@ public class S3ReadService {
 
     private Map<String, String> getObjectKeys(String bucketName) {
 
-        final LinkedHashMap<String, String> collect = amazonS3Client.listObjectsV2( bucketName ).getObjectSummaries().stream()
-                .collect( Collectors.toMap(
-                        S3ObjectSummary::getKey,
-                        objectSummary -> objectSummary.getLastModified().toLocaleString(),
-                        (u, v) -> u,
-                        LinkedHashMap::new )
-                );
+        final List<S3ObjectSummary> objectSummaries = amazonS3Client.listObjectsV2( bucketName ).getObjectSummaries();
 
-        System.out.println( "0------->" + collect.toString() );
+
+        final LinkedHashMap<String, String> collect = objectSummaries.stream().collect( Collectors.toMap(
+                S3ObjectSummary::getKey,
+                objectSummary -> objectSummary.getLastModified().toLocaleString(),
+                (u, v) -> u,
+                LinkedHashMap::new ) );
+
 
         return collect;
     }
@@ -70,7 +69,7 @@ public class S3ReadService {
         log.info( "Inside listObjectsWithMetadata" );
         try {
             Map<String, ObjectMetadata> objectsMetadata = getObjectMetaData( bucketName, userId );
-            System.out.println( "objectsMetadata------------>" + objectsMetadata );
+
             FolderComponent completeFileStructure = bucketObjectsHelper.convertKeysInFileStructureFormat( getObjectKeys( bucketName ), bucketName, objectsMetadata );
             return objectToJsonConverter.writeValueAsString( completeFileStructure );
         } catch (Exception e) {

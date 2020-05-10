@@ -29,9 +29,9 @@ public class BucketService {
         CustomResponse customResponse = new CustomResponse();
         try {
             if (Boolean.FALSE.equals( s3WriteService.doesBucketExist( bucket.getBucketName() ) )) {
-                System.out.println( " isBucketCreated---inside--->" );
+
                 Boolean isBucketCreated = s3WriteService.createBucket( bucket );
-                System.out.println( " isBucketCreated------>" + isBucketCreated );
+
                 if (isBucketCreated) {
                     ListenableFuture<SendResult<String, String>> isAccessInfoEventSent = kafkaTemplate.send( "BucketAccessManagement", "createBucket", bucket.getBucketName() );
                     ListenableFuture<SendResult<String, String>> isUpdatingTheCacheEventForReadServerSent = kafkaTemplate.send( "read", "add", bucket.getBucketName() );

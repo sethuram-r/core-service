@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-public class ReadService {
+public class ReadService implements AccessManager {
 
     private S3ReadService s3ReadService;
     private List<Bucket> bucketList = null;
@@ -50,25 +50,25 @@ public class ReadService {
         return bucketList;
     }
 
-    public List<Bucket> getBucketsByUserNameAndEmail(String userName, String email) {
+    public List<Bucket> getBucketsByUserId(int userId) {
         log.info( "Inside getBucketsByUserNameAndEmail" );
         List<Bucket> bucketsInS3 = getBucketListFromS3();
-        Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserNameAndEmail( userName, email ).stream()
+        Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserId( userId ).stream()
                 .collect( Collectors.toMap( BucketMetadata::getBucketName, Function.identity() ) );
         if (!bucketsInS3.isEmpty() && !bucketsMetadata.isEmpty()) {
-            System.out.println( "bucketsInS3---->" + bucketsInS3.toString() );
-            System.out.println( "bucketsMetadata---->" + bucketsMetadata.toString() );
+
 
             bucketsInS3.forEach( bucket -> {
                 if (bucketsMetadata.containsKey( bucket.getName() ))
                     bucket.setAccess( bucketsMetadata.get( bucket.getName() ) );
             } );
         }
-        System.out.println( "bucketsInS3----->" + bucketsInS3.toString() );
+
         return bucketsInS3;
     }
 
 
+    @Override
     public String getFilesAndFoldersByUserIdAndBucketName(int userId, String bucketName) {
         log.info( "Inside getFilesAndFoldersByUserAndBucket" );
         return s3ReadService.listObjectsWithMetadata( userId, bucketName );
@@ -97,7 +97,6 @@ public class ReadService {
                 return new S3DownloadedObject( objectName, bucketName, convertCachedFileToBASE64DecodedMultipartFile( cachedObject ).getResource() );
             } else {
                 log.info( "Requested Resource Doesn't Exist in Cache" );
-                // if (!lockServerAPIService.getLockStatusForGivenObject( objectName )) {
                 if (Boolean.FALSE.equals( lockServerAPIService.getLockStatusForGivenObject( objectName ) )) {
                     BASE64DecodedMultipartFile downloadedObjectInMultipartFile = convertRawS3ObjectIntoBase64( Objects.requireNonNull( s3ReadService.getObject( objectName, bucketName ) ) );
                     S3DownloadedObject s3DownloadedObject = new S3DownloadedObject( objectName, bucketName, downloadedObjectInMultipartFile.getResource() );

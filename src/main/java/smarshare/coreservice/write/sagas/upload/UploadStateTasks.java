@@ -135,7 +135,7 @@ public class UploadStateTasks {
             }
 
         } catch (Exception e) {
-            System.out.println( "Exception in consumeLockServerEvents" + " " + e.getMessage() + " " + e.getCause() );
+            log.error( "Exception in consumeLockServerEvents" + " " + e.getMessage() + " " + e.getCause() );
 
         } finally {
             kafkaLockConsumer.unsubscribe();
@@ -164,7 +164,7 @@ public class UploadStateTasks {
             }
 
         } catch (Exception e) {
-            System.out.println( "Exception in consumeAccessManagementServerEvents" + " " + e.getMessage() + " " + e.getCause() );
+            log.error( "Exception in consumeAccessManagementServerEvents" + " " + e.getMessage() + " " + e.getCause() );
 
         } finally {
             kafkaAccessManagementConsumer.unsubscribe();

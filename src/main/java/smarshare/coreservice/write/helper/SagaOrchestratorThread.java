@@ -19,7 +19,7 @@
 //    public SagaOrchestratorThread(List<UploadObject> uploadObjects) {
 //        thread = new Thread( this, "Saga Upload Orchestrator Thread" );
 //        this.stateMachineOrchestrator = new StateMachineOrchestrator(  );
-//        System.out.println("inside thread"+ stateMachineOrchestrator);
+//
 //    }
 //
 //    @Override

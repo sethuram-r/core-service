@@ -40,7 +40,7 @@ public class WriteController {
     public ResponseEntity createBucket(@RequestBody Bucket bucket) {
         log.info( "Inside createBucket" );
         final CustomResponse createBucketResult = bucketService.createBucket( bucket );
-        System.out.println( "createBucketResult --->" + createBucketResult.toString() );
+
         if (Boolean.FALSE.equals( createBucketResult.getOperationResult() ) && null != createBucketResult.getErrorMessage()) {
             return new ResponseEntity<>( HttpStatus.PRECONDITION_FAILED );
         } else return ResponseEntity.ok( true );

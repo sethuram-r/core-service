@@ -5,10 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import smarshare.coreservice.read.dto.DownloadFolderRequest;
+import smarshare.coreservice.read.service.AccessManagementAPIService;
+import smarshare.coreservice.read.service.AccessManager;
+import smarshare.coreservice.read.service.AdminProxy;
 import smarshare.coreservice.read.service.ReadService;
 
 
@@ -19,22 +23,30 @@ import smarshare.coreservice.read.service.ReadService;
 public class ReadController {
 
     private ReadService readService;
+    private AccessManagementAPIService accessManagementAPIService;
 
     @Autowired
-    ReadController(ReadService readService) {
+    ReadController(ReadService readService,
+                   AccessManagementAPIService accessManagementAPIService) {
         this.readService = readService;
+        this.accessManagementAPIService = accessManagementAPIService;
     }
 
     @GetMapping(value = "buckets")
-    public ResponseEntity getBucketList(@RequestParam("userName") String userName, @RequestParam("email") String email) {
+    public ResponseEntity getBucketList(@RequestParam("userId") int userId) {
         log.info( "Inside getBucketList" );
-        return ResponseEntity.ok().body( readService.getBucketsByUserNameAndEmail( userName, email ) );
+        return ResponseEntity.ok().body( readService.getBucketsByUserId( userId ) );
     }
 
     @GetMapping(value = "objects")
-    public String listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userId") int userId, @RequestParam("bucketName") String bucketName) {
+    public ResponseEntity<String> listFilesAndFoldersForIndividualUserForParticularBucket(@RequestParam("userId") int userId, @RequestParam("bucketName") String bucketName) {
         log.info( "Inside listFilesAndFoldersForIndividualUserForParticularBucket" );
-        return readService.getFilesAndFoldersByUserIdAndBucketName( userId, bucketName );
+        AccessManager readServiceProxy = AdminProxy.newInstance( readService, accessManagementAPIService );
+        final String result = readServiceProxy.getFilesAndFoldersByUserIdAndBucketName( userId, bucketName );
+        if (result.equals( "No Access" )) {
+            return new ResponseEntity<>( "No Access", HttpStatus.UNAUTHORIZED );
+        }
+        return new ResponseEntity<>( result, HttpStatus.OK );
     }
 
     @GetMapping(value = "file/download")

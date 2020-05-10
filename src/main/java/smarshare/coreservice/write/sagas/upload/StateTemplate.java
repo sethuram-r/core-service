@@ -79,7 +79,7 @@ public class StateTemplate {
             }
         } catch (Exception e) {
             this.nextState = (null != getFailureState()) ? getFailureState().currentStateName : null;
-            System.out.println( " Exception " + getCurrentStateName() + " " + e.getMessage() );
+
         }
         this.nextState = (null != getFailureState()) ? getFailureState().currentStateName : null;
         return taskInput;

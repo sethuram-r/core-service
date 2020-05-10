@@ -21,7 +21,6 @@ import smarshare.coreservice.write.helper.CacheUpdateThread;
 import smarshare.coreservice.write.model.UploadObject;
 import smarshare.coreservice.write.model.lock.S3Object;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -70,7 +69,7 @@ public class BucketObjectService {
                 bucketObjectForEvent.setOwnerId( emptyFolder.getOwnerId() );
                 bucketObjectForEvent.setUserId( emptyFolder.getOwnerId() );
                 bucketObjectForEvent.setUserName( emptyFolder.getOwner() );
-                System.out.println( Arrays.toString( Collections.singletonList( bucketObjectForEvent ).toArray() ) );
+
                 String stringConverted = jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectForEvent ) );
                 kafkaTemplate.send( "BucketObjectAccessManagement", "emptyBucketObject", stringConverted );
             }
@@ -105,7 +104,7 @@ public class BucketObjectService {
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
                 if (s3WriteService.deleteObject( objectName, bucketName )) {
                     BucketObjectEvent bucketObjectDeleteEvent = mapBucketObjectToBucketObjectEvent( objectName, bucketName, ownerId );
-                    System.out.println( " bucketObjectDeleteEvent---->" + bucketObjectDeleteEvent.toString() );
+
                     kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectDeleteEvent ) ) );
                     deleteObjectInCache( bucketName + "/" + objectName );
                     return true;
@@ -128,7 +127,7 @@ public class BucketObjectService {
                     .map( deleteObjectRequest -> new S3Object( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) )
                     .collect( Collectors.toList() );
             final String lockEventObjects = jsonConverter.writeValueAsString( objectsToBeLocked );
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock2", "objects", lockEventObjects );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock3", "objects", lockEventObjects );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
 
                 List<String> objectNames = deleteObjectsRequest.getFolderObjects().stream()
@@ -144,7 +143,7 @@ public class BucketObjectService {
                                     deleteObjectRequest.getOwnerId() )
                             )
                             .collect( Collectors.toList() );
-                    System.out.println( "bucketObjectsForDeleteEvent--->" + bucketObjectsForDeleteEvent );
+
                     kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectsForDeleteEvent ) );
                     deleteObjectsRequest.getFolderObjects().forEach( deleteObjectRequest -> deleteObjectInCache( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) );
                     return true;

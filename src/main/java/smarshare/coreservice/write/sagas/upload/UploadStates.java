@@ -197,7 +197,6 @@ public class UploadStates {
 
     public StateTemplate getUploadStateByName(UploadStateNames name) {
 
-        System.out.println( name );
 
         switch (name) {
             case UPLOAD_REQUEST_ACCEPTED:

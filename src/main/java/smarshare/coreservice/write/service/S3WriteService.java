@@ -49,7 +49,7 @@ public class S3WriteService {
             CreateBucketRequest createBucketRequest = new CreateBucketRequest( bucket.getBucketName(), "eu-west-1" )
                     .withCannedAcl( CannedAccessControlList.BucketOwnerFullControl );
             final com.amazonaws.services.s3.model.Bucket createdBucket = amazonS3Client.createBucket( createBucketRequest );
-            System.out.println( "createdBucket------->" + createdBucket );
+
             return Boolean.TRUE;
 
         } catch (AmazonS3Exception e) {

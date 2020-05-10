@@ -7,6 +7,8 @@ import smarshare.coreservice.read.model.filestructure.AccessInfo;
 import smarshare.coreservice.read.model.filestructure.FileComponent;
 import smarshare.coreservice.read.model.filestructure.FolderComponent;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -17,6 +19,12 @@ public class BucketObjectsHelper {
 
     private Pattern fileExtensionRegex = Pattern.compile( "(.*)([a-zA-Z0-9\\s_\\\\.\\-\\(\\):])+(\\..*)$" );
 
+    private Boolean checkPreviousFolderInFile(String previousFolderName, String currentObjectName) {
+        List<String> previousFolderSplits = Arrays.asList( previousFolderName.split( "/" ) );
+        List<String> currentFolderSplits = Arrays.asList( currentObjectName.split( "/" ) );
+        return previousFolderSplits.get( previousFolderSplits.size() - 1 ).equals( currentFolderSplits.get( currentFolderSplits.size() - 2 ) );
+    }
+
 
     private FolderComponent fileStructureConverter(Map<String, String> extractedKeys, String bucketName, Map<String, ObjectMetadata> objectMetadata) {
         log.info( "Inside fileStructureConverter" );
@@ -24,9 +32,10 @@ public class BucketObjectsHelper {
 
         // Forming the root node
 
-        FolderComponent root = new FolderComponent( bucketName, null, "", 0, "/" );
+        FolderComponent root = new FolderComponent( bucketName, null, "", 0, "/", null );
         FolderComponent previousFolder = root;
         for (Map.Entry<String, String> extractedKey : extractedKeys.entrySet()) {
+
 
             AccessInfo currentKeyAccessInfo = null;
             String owner = "";
@@ -49,17 +58,28 @@ public class BucketObjectsHelper {
 
             //only folders and files within folders are allowed
             if (extractedKey.getKey().endsWith( "/" ) || fileExtensionRegex.matcher( extractedKey.getKey() ).matches()) {
-
                 //first level of folder
-                if (extractedKey.getKey().endsWith( "/" ) && (previousFolder.getName().equals( bucketName ) || !extractedKey.getKey().contains( previousFolder.getName() + "/" ))) {
-                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.getKey().replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey() ) );
+                if (extractedKey.getKey().endsWith( "/" ) && (previousFolder.getName().equals( bucketName ) || (!extractedKey.getKey().contains( previousFolder.getCompleteName() ) && (!extractedKey.getKey().endsWith( "/" ) && !previousFolder.getCompleteName().endsWith( "/" ))))) {
+                    previousFolder = (FolderComponent) root.add( new FolderComponent( extractedKey.getKey().replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), root ) );
                 } else // sub level in folders
-                    if (extractedKey.getKey().endsWith( "/" ) && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
-                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey() ) );
-                    } else //file in sub level folders
-                        if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches() && extractedKey.getKey().contains( previousFolder.getName() + "/" )) {
-                            previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
+                    if (extractedKey.getKey().endsWith( "/" ) && extractedKey.getKey().contains( previousFolder.getName() + "/" ) || (extractedKey.getKey().endsWith( "/" ) && previousFolder.getName().endsWith( "/" ))) {
+                        previousFolder = (FolderComponent) previousFolder.add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), previousFolder ) );
+                    } else {
+                        //file in sub level folders
+                        if (fileExtensionRegex.matcher( extractedKey.getKey() ).matches()) {
+                            if (checkPreviousFolderInFile( previousFolder.getCompleteName(), extractedKey.getKey() )) {
+                                previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
+                            } else {
+                                String[] splitKey = extractedKey.getKey().split( "/" );
+                                previousFolder.getParent().add( new FileComponent( splitKey[splitKey.length - 1], currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
+
+                            }
                         }
+                        // folder - folder sibling
+                        if ((extractedKey.getKey().endsWith( "/" ) && previousFolder.getCompleteName().endsWith( "/" ))) {
+                            previousFolder = (FolderComponent) previousFolder.getParent().add( new FolderComponent( extractedKey.getKey().replace( previousFolder.getParent().getCompleteName(), " " ).replace( "/", " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), previousFolder.getParent() ) );
+                        }
+                    }
             } else {
                 //file without extensions
                 previousFolder.add( new FileComponent( extractedKey.getKey().replace( previousFolder.getCompleteName(), " " ).trim(), currentKeyAccessInfo, owner, ownerId, extractedKey.getKey(), extractedKey.getValue() ) );
