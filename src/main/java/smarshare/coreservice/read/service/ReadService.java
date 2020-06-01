@@ -3,6 +3,7 @@ package smarshare.coreservice.read.service;
 import com.amazonaws.services.s3.model.S3Object;
 import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -120,7 +121,8 @@ public class ReadService implements AccessManager {
                 return new DownloadedObject( s3DownloadObject.getFileName(), s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), cachedObject.getFileContentInBase64() );
             } else {
                 S3Object s3Object = (Objects.requireNonNull( s3ReadService.getObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName() ) ));
-                byte[] contentBytes = s3Object.getObjectContent().readAllBytes();
+                //byte[] contentBytes = s3Object.getObjectContent().readAllBytes();
+                byte[] contentBytes = IOUtils.toByteArray( s3Object.getObjectContent() );
                 s3Object.getObjectContent().close();
                 CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( cacheManager, new DownloadedCacheObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), new BASE64DecodedMultipartFile( contentBytes ) ) );
                 cacheInsertionThread.thread.start();
