@@ -78,14 +78,13 @@ public class UploadStateTasks {
     }
 
 
-    // Issue to address in lock server dto from saga and lock server doesn't match
 
     boolean lockEventToKafka(SagaEventWrapper objectsToBeLocked) {
         log.info( "Inside lockEventToKafka" );
         List<S3Object> objectsToBeLockedAsS3Object = objectsToBeLocked.getObjects().stream()
                 .map( uploadObject -> new S3Object( uploadObject.getBucketName() + "/" + uploadObject.getObjectName() ) )
                 .collect( Collectors.toList() );
-        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeLocked.getEventId(), objectsToBeLockedAsS3Object ), KafkaConstants.LOCK );
+        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeLocked.getEventId(), objectsToBeLockedAsS3Object ), KafkaConstants.LOCK_KEY );
     }
 
 
@@ -95,7 +94,7 @@ public class UploadStateTasks {
         List<S3Object> objectsToBeUnLockedAsS3Object = objectsToBeUnLocked.getObjects().stream()
                 .map( uploadObject -> new S3Object( uploadObject.getBucketName() + "/" + uploadObject.getObjectName() ) )
                 .collect( Collectors.toList() );
-        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeUnLocked.getEventId(), objectsToBeUnLockedAsS3Object ), KafkaConstants.UN_LOCK );
+        return sendEventToLockServer( new SagaEventLockWrapper( objectsToBeUnLocked.getEventId(), objectsToBeUnLockedAsS3Object ), KafkaConstants.UN_LOCK_KEY );
     }
 
 
@@ -174,11 +173,11 @@ public class UploadStateTasks {
     }
 
     boolean consumeLockEventsFromLockServer(SagaEventWrapper objectToBeConsumed) {
-        return consumeLockServerEvents( objectToBeConsumed, KafkaConstants.LOCK.valueOf() );
+        return consumeLockServerEvents( objectToBeConsumed, KafkaConstants.LOCK_KEY.valueOf() );
     }
 
     boolean consumeUnLockEventsFromLockServer(SagaEventWrapper objectToBeConsumed) {
-        return consumeLockServerEvents( objectToBeConsumed, KafkaConstants.UN_LOCK.valueOf() );
+        return consumeLockServerEvents( objectToBeConsumed, KafkaConstants.UN_LOCK_KEY.valueOf() );
     }
 
     boolean consumeCreateEventsFromAccessManagementServer(SagaEventWrapper objectToBeConsumed) {

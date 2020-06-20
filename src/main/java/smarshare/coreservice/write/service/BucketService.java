@@ -14,8 +14,8 @@ import smarshare.coreservice.write.model.Bucket;
 @Service
 public class BucketService {
 
-    private S3WriteService s3WriteService;
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private final S3WriteService s3WriteService;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Autowired
     public BucketService(S3WriteService s3WriteService, KafkaTemplate<String, String> kafkaTemplate) {

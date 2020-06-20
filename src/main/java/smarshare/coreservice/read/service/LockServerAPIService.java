@@ -15,8 +15,8 @@ import smarshare.coreservice.configuration.LockServerConfiguration;
 public class LockServerAPIService {
 
 
-    private UriComponentsBuilder lockServerUrl;
-    private RestTemplate restTemplate;
+    private final UriComponentsBuilder lockServerUrl;
+    private final RestTemplate restTemplate;
 
     @Autowired
     LockServerAPIService(

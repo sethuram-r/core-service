@@ -23,9 +23,9 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class WriteController {
 
-    private BucketObjectService bucketObjectService;
-    private BucketService bucketService;
-    private SagaBucketObjectUploadService sagaBucketObjectUploadService;
+    private final BucketObjectService bucketObjectService;
+    private final BucketService bucketService;
+    private final SagaBucketObjectUploadService sagaBucketObjectUploadService;
 
 
     @Autowired
@@ -60,15 +60,12 @@ public class WriteController {
     }
 
 
-    //objectName is always complete name without bucketName
     @DeleteMapping(value = "file")
     public Boolean deleteFile(@RequestParam("objectName") String objectName,
                               @RequestParam("bucketName") String bucketName,
                               @RequestParam("ownerId") int ownerId) {
         log.info( "Inside deleteFile" );
-        return bucketObjectService.deleteObject( objectName,
-                bucketName,
-                ownerId );
+        return bucketObjectService.deleteObject( objectName, bucketName, ownerId );
     }
 
     @DeleteMapping(value = "folder")

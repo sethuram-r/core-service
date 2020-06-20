@@ -9,15 +9,11 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.Upload;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import smarshare.coreservice.write.model.Bucket;
 import smarshare.coreservice.write.model.UploadObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,8 +22,8 @@ import java.util.stream.Collectors;
 @Service
 public class S3WriteService {
 
-    private AmazonS3 amazonS3Client;
-    private TransferManager transferManager;
+    private final AmazonS3 amazonS3Client;
+    private final TransferManager transferManager;
 
 
     @Autowired
@@ -48,7 +44,7 @@ public class S3WriteService {
 
             CreateBucketRequest createBucketRequest = new CreateBucketRequest( bucket.getBucketName(), "eu-west-1" )
                     .withCannedAcl( CannedAccessControlList.BucketOwnerFullControl );
-            final com.amazonaws.services.s3.model.Bucket createdBucket = amazonS3Client.createBucket( createBucketRequest );
+            amazonS3Client.createBucket( createBucketRequest );
 
             return Boolean.TRUE;
 
@@ -83,10 +79,7 @@ public class S3WriteService {
         return false;
     }
 
-    private File getDummyFile() throws IOException {
-        Resource resource = new ClassPathResource( "static/dummy" );
-        return resource.getFile();
-    }
+
 
     public Boolean createObjectInBucket(UploadObject emptyFolder) {
         log.info( "Inside createObjectInSpecifiedBucket" );
@@ -137,9 +130,8 @@ public class S3WriteService {
 
             Upload uploadedObject = transferManager.upload( request );
 
-            uploadedObject.addProgressListener( (ProgressListener) progressEvent -> {
-                log.info( "Transferred bytes of object " + uploadObject.getObjectName() + " : " + progressEvent.getBytesTransferred() );
-            } );
+            uploadedObject.addProgressListener(
+                    (ProgressListener) progressEvent -> log.info( "Transferred bytes of object " + uploadObject.getObjectName() + " : " + progressEvent.getBytesTransferred() ) );
             uploadedObject.waitForUploadResult();
 
             log.info( "Transfer of " + uploadedObject.getState() );
@@ -162,15 +154,6 @@ public class S3WriteService {
             log.error( String.format( "Exception occurred while uploading %s", e ) );
         }
         return Boolean.FALSE;
-    }
-
-    public List<S3ObjectSummary> listObjectsByPrefix(String objectName, String bucketName) {
-
-        ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
-                .withBucketName( bucketName )
-                .withPrefix( objectName );
-        return amazonS3Client.listObjectsV2( listObjectsRequest ).getObjectSummaries();
-
     }
 
 

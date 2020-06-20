@@ -1,12 +1,10 @@
 package smarshare.coreservice.write.service;
 
 import com.amazonaws.services.s3.model.DeleteObjectsResult;
-import com.amazonaws.services.s3.transfer.Transfer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -20,39 +18,32 @@ import smarshare.coreservice.write.helper.CacheDeleteThread;
 import smarshare.coreservice.write.helper.CacheUpdateThread;
 import smarshare.coreservice.write.model.UploadObject;
 import smarshare.coreservice.write.model.lock.S3Object;
+import smarshare.coreservice.write.sagas.constants.KafkaConstants;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
-//import smarshare.coreservice.write.helper.SagaOrchestratorThread;
 
 @Slf4j
 @Service
 @Component
 public class BucketObjectService {
 
-    private KafkaTemplate<String, String> kafkaTemplate;
-    private ObjectWriter jsonConverter;
-    private S3WriteService s3WriteService;
-    private CacheManager cacheManager;
-
-
-    @Qualifier("sagaOrchestratorTaskExecutor")
-    private Executor sagaTaskExecutor;
-
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectWriter jsonConverter;
+    private final S3WriteService s3WriteService;
+    private final CacheManager cacheManager;
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Autowired
     BucketObjectService(KafkaTemplate<String, String> kafkaTemplate, ObjectWriter jsonConverter, CacheManager cacheManager,
-                        S3WriteService s3WriteService, Executor sagaTaskExecutor) {
+                        S3WriteService s3WriteService) {
         this.kafkaTemplate = kafkaTemplate;
         this.jsonConverter = jsonConverter;
         this.s3WriteService = s3WriteService;
         this.cacheManager = cacheManager;
-        this.sagaTaskExecutor = sagaTaskExecutor;
     }
 
 
@@ -61,7 +52,7 @@ public class BucketObjectService {
         Boolean createObjectResult = s3WriteService.createObjectInBucket( emptyFolder );
 
         try {
-            if (createObjectResult) {
+            if (createObjectResult.equals( Boolean.TRUE )) {
                 BucketObjectEvent bucketObjectForEvent = new BucketObjectEvent();
                 bucketObjectForEvent.setBucketName( emptyFolder.getBucketName() );
                 bucketObjectForEvent.setObjectName( emptyFolder.getObjectName() );
@@ -82,7 +73,7 @@ public class BucketObjectService {
 
     private void deleteObjectInCache(String objectName) {
         log.info( "Inside deleteObjectInCache" );
-        if (cacheManager.checkWhetherObjectExistInCache( objectName )) {
+        if (cacheManager.checkWhetherObjectExistInCache( objectName ).equals( Boolean.TRUE )) {
             CacheDeleteThread cacheUpdateThread = new CacheDeleteThread( objectName, cacheManager );
             cacheUpdateThread.thread.start();
         }
@@ -100,15 +91,15 @@ public class BucketObjectService {
         log.info( "Inside deleteObject" );
         try {
             final String lockEventObjects = jsonConverter.writeValueAsString( new S3Object( bucketName + "/" + objectName ) );
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock2", "object", lockEventObjects );
-            if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
-                if (s3WriteService.deleteObject( objectName, bucketName )) {
-                    BucketObjectEvent bucketObjectDeleteEvent = mapBucketObjectToBucketObjectEvent( objectName, bucketName, ownerId );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( KafkaConstants.LOCK_TOPIC.valueOf(), KafkaConstants.LOCK_KEY.valueOf(), lockEventObjects );
+            if (!producerResult.get().getRecordMetadata().toString().isEmpty() && s3WriteService.deleteObject( objectName, bucketName ).equals( Boolean.TRUE )) {
 
-                    kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectDeleteEvent ) ) );
-                    deleteObjectInCache( bucketName + "/" + objectName );
-                    return true;
-                }
+                BucketObjectEvent bucketObjectDeleteEvent = mapBucketObjectToBucketObjectEvent( objectName, bucketName, ownerId );
+                kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( Collections.singletonList( bucketObjectDeleteEvent ) ) );
+                deleteObjectInCache( bucketName + "/" + objectName );
+                kafkaTemplate.send( KafkaConstants.LOCK_TOPIC.valueOf(), KafkaConstants.UN_LOCK_KEY.valueOf(), lockEventObjects );
+                return true;
+
             }
 
         } catch (Exception exception) {
@@ -127,7 +118,7 @@ public class BucketObjectService {
                     .map( deleteObjectRequest -> new S3Object( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) )
                     .collect( Collectors.toList() );
             final String lockEventObjects = jsonConverter.writeValueAsString( objectsToBeLocked );
-            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( "lock3", "objects", lockEventObjects );
+            ListenableFuture<SendResult<String, String>> producerResult = kafkaTemplate.send( KafkaConstants.LOCK_TOPIC.valueOf(), KafkaConstants.LOCK_KEY.valueOf(), lockEventObjects );
             if (!producerResult.get().getRecordMetadata().toString().isEmpty()) {
 
                 List<String> objectNames = deleteObjectsRequest.getFolderObjects().stream()
@@ -146,6 +137,7 @@ public class BucketObjectService {
 
                     kafkaTemplate.send( "BucketObjectAccessManagement", "deleteBucketObjects", jsonConverter.writeValueAsString( bucketObjectsForDeleteEvent ) );
                     deleteObjectsRequest.getFolderObjects().forEach( deleteObjectRequest -> deleteObjectInCache( deleteObjectRequest.getBucketName() + "/" + deleteObjectRequest.getObjectName() ) );
+                    kafkaTemplate.send( KafkaConstants.LOCK_TOPIC.valueOf(), KafkaConstants.UN_LOCK_KEY.valueOf(), lockEventObjects );
                     return true;
                 }
             }
@@ -168,18 +160,14 @@ public class BucketObjectService {
     }
 
 
-    public Transfer.TransferState uploadObjectToS3(UploadObject uploadObject) {
-        return s3WriteService.uploadObject( uploadObject );
-    }
-
 
     public Boolean uploadObjectsToS3(List<UploadObject> uploadObjects) {
         log.info( "inside uploadObjectToS3 " );
 
         try {
-            if (s3WriteService.uploadObjects( uploadObjects )) {
+            if (s3WriteService.uploadObjects( uploadObjects ).equals( Boolean.TRUE )) {
                 for (UploadObject uploadObject : uploadObjects) {
-                    if (cacheManager.checkWhetherObjectExistInCache( uploadObject.getBucketName() + uploadObject.getObjectName() )) {
+                    if (cacheManager.checkWhetherObjectExistInCache( uploadObject.getBucketName() + uploadObject.getObjectName() ).equals( Boolean.TRUE )) {
                         CacheUpdateThread cacheUpdateThread = new CacheUpdateThread( uploadObject );
                         cacheUpdateThread.thread.start();
                     }
