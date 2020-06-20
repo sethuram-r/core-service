@@ -31,4 +31,4 @@ build/
 .vscode/
 
 ### added by sethuram ###
-application.properties
+src/main/resources/application-dev.properties
