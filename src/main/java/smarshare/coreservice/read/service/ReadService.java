@@ -3,7 +3,6 @@ package smarshare.coreservice.read.service;
 import com.amazonaws.services.s3.model.S3Object;
 import com.google.common.io.ByteStreams;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.IOUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -26,11 +25,11 @@ import java.util.stream.Collectors;
 @Service
 public class ReadService implements AccessManager {
 
-    private S3ReadService s3ReadService;
-    private List<Bucket> bucketList = null;
-    private LockServerAPIService lockServerAPIService;
-    private AccessManagementAPIService accessManagementAPIService;
-    private CacheManager cacheManager;
+    private final S3ReadService s3ReadService;
+    private final LockServerAPIService lockServerAPIService;
+    private final AccessManagementAPIService accessManagementAPIService;
+    private final CacheManager cacheManager;
+    private List<Bucket> bucketList = new ArrayList<>();
 
 
     @Autowired
@@ -45,8 +44,8 @@ public class ReadService implements AccessManager {
 
     private List<Bucket> getBucketListFromS3() {
         log.info( "Inside getBucketListFromS3" );
-        if (bucketList == null) {
-            return s3ReadService.listBuckets();
+        if (bucketList.isEmpty()) {
+            this.bucketList = s3ReadService.listBuckets();
         }
         return bucketList;
     }
@@ -57,7 +56,6 @@ public class ReadService implements AccessManager {
         Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserId( userId ).stream()
                 .collect( Collectors.toMap( BucketMetadata::getBucketName, Function.identity() ) );
         if (!bucketsInS3.isEmpty() && !bucketsMetadata.isEmpty()) {
-
 
             bucketsInS3.forEach( bucket -> {
                 if (bucketsMetadata.containsKey( bucket.getName() ))
@@ -121,8 +119,7 @@ public class ReadService implements AccessManager {
                 return new DownloadedObject( s3DownloadObject.getFileName(), s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), cachedObject.getFileContentInBase64() );
             } else {
                 S3Object s3Object = (Objects.requireNonNull( s3ReadService.getObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName() ) ));
-                //byte[] contentBytes = s3Object.getObjectContent().readAllBytes();
-                byte[] contentBytes = IOUtils.toByteArray( s3Object.getObjectContent() );
+                byte[] contentBytes = s3Object.getObjectContent().readAllBytes();
                 s3Object.getObjectContent().close();
                 CacheInsertionThread cacheInsertionThread = new CacheInsertionThread( cacheManager, new DownloadedCacheObject( s3DownloadObject.getObjectName(), s3DownloadObject.getBucketName(), new BASE64DecodedMultipartFile( contentBytes ) ) );
                 cacheInsertionThread.thread.start();
@@ -138,8 +135,6 @@ public class ReadService implements AccessManager {
     public List<DownloadedObject> downloadFolder(DownloadFolderRequest objectsToBeDownloaded) {
         log.info( "Inside downloadFolder" );
         try {
-            // change based on sonar lint
-            // if (!lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() )) {
             if (Boolean.FALSE.equals( lockServerAPIService.getLockStatusForGivenObjects( objectsToBeDownloaded.getObjectsToBeDownloaded().get( 0 ).getObjectName() ) )) {
                 return objectsToBeDownloaded.getObjectsToBeDownloaded().stream()
 //                        .filter( s3DownloadObject -> !s3DownloadObject.getObjectName().endsWith( "/" ) ) not needed

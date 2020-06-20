@@ -29,11 +29,11 @@ import java.util.stream.Collectors;
 @Component
 public class UploadStateTasks {
 
-    private KafkaTemplate<String, SagaEventLockWrapper> kafkaTemplateForLockServer;
-    private KafkaTemplate<String, SagaEventAccessManagementServiceWrapper> kafkaTemplateForAccessManagementServer;
-    private KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer;
-    private KafkaConsumer<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementConsumer;
-    private BucketObjectService bucketObjectService;
+    private final KafkaTemplate<String, SagaEventLockWrapper> kafkaTemplateForLockServer;
+    private final KafkaTemplate<String, SagaEventAccessManagementServiceWrapper> kafkaTemplateForAccessManagementServer;
+    private final KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer;
+    private final KafkaConsumer<String, SagaEventAccessManagementServiceWrapper> kafkaAccessManagementConsumer;
+    private final BucketObjectService bucketObjectService;
 
 
     @Autowired

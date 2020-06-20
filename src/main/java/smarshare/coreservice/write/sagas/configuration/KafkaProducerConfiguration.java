@@ -18,7 +18,7 @@ import java.util.Map;
 @Configuration
 public class KafkaProducerConfiguration {
 
-    private Map<String, Object> configurationProperties;
+    private final Map<String, Object> configurationProperties;
 
     KafkaProducerConfiguration() {
         this.configurationProperties = new HashMap<>();
