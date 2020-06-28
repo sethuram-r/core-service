@@ -37,7 +37,6 @@ public class KafkaConsumerConfiguration {
         configurationProperties.put( ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class );
     }
 
-
     @Bean(name = "kafkaLockConsumer")
     public KafkaConsumer<String, SagaEventLockWrapper> kafkaLockConsumer() {
         return new KafkaConsumer<>( configurationProperties, new StringDeserializer(), new JsonDeserializer<>( SagaEventLockWrapper.class, false ) );
