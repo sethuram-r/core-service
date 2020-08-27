@@ -19,8 +19,8 @@ import java.util.stream.IntStream;
 public class CacheManager {
 
 
-    private FileDirectoryManger fileDirectoryManger;
-    private DescendingScoreComparator descendingScoreComparator;
+    private final FileDirectoryManger fileDirectoryManger;
+    private final DescendingScoreComparator descendingScoreComparator;
     private List<CacheEntry> cacheContainer;
     private int maxLimitOfCacheContainer = 10;
 
@@ -29,7 +29,8 @@ public class CacheManager {
     CacheManager(FileDirectoryManger fileDirectoryManger, DescendingScoreComparator descendingScoreComparator) {
         this.fileDirectoryManger = fileDirectoryManger;
         this.descendingScoreComparator = descendingScoreComparator;
-        this.cacheContainer = new ArrayList<CacheEntry>() {
+        this.cacheContainer = new ArrayList<>() {
+            @Override
             public boolean add(CacheEntry newCacheEntry) {
 
                 boolean isCacheEntryExists = cacheContainer.stream()
@@ -53,7 +54,7 @@ public class CacheManager {
         this.maxLimitOfCacheContainer = maxLimitOfCacheContainer;
     }
 
-    private Boolean didCacheContainerReachedThreshold() {
+    private boolean didCacheContainerReachedThreshold() {
         return (this.cacheContainer.size() == this.maxLimitOfCacheContainer) ? Boolean.TRUE : Boolean.FALSE;
     }
 
@@ -65,7 +66,7 @@ public class CacheManager {
         return groupedCacheContainer.get( getMinimumValue( cacheContainerScores ) );
     }
 
-    private Boolean refreshCacheContainer(List<CacheEntry> minimumGroupedCacheContainer, List cacheContainer) {
+    private Boolean refreshCacheContainer(List<CacheEntry> minimumGroupedCacheContainer, List<CacheEntry> cacheContainer) {
         log.info( "Inside routine execution plan" );
         CacheEntry cacheEntryToBeRemoved = minimumGroupedCacheContainer.get( 0 );
         FileToBeCached correspondingFileOfCacheEntryToBeDeleted = cacheEntryToBeRemoved.getCacheInFileSystem();
@@ -77,16 +78,22 @@ public class CacheManager {
 
     private Boolean cacheReplace() {
 
+        Map<Integer, List<CacheEntry>> groupedCacheEntriesByScores = this.cacheContainer.stream().collect( Collectors.groupingBy( CacheEntry::getScore ) );
+        List<CacheEntry> minimumGroupedCacheContainerByScore = getMinimumGroupedCacheContainer( this.cacheContainer.stream().mapToInt( CacheEntry::getScore ), groupedCacheEntriesByScores );
 
-        Map<Integer, List<CacheEntry>> groupedCacheContainer = this.cacheContainer.stream().collect( Collectors.groupingBy( CacheEntry::getScore ) );
-        List<CacheEntry> minimumGroupedCacheContainer = getMinimumGroupedCacheContainer( this.cacheContainer.stream().mapToInt( CacheEntry::getScore ), groupedCacheContainer );
-        if (minimumGroupedCacheContainer.size() == 1 && minimumGroupedCacheContainer.get( 0 ).getScore() == 0 && minimumGroupedCacheContainer.get( 0 ).getTimeToGetIntoRefreshExecutionPlan() == 1) {
+        if (minimumGroupedCacheContainerByScore.size() == 1 && minimumGroupedCacheContainerByScore.get( 0 ).getScore() == 0 && minimumGroupedCacheContainerByScore.get( 0 ).getTimeToGetIntoRefreshExecutionPlan() == 1) {
             log.info( " Inside special execution plan" );
-            minimumGroupedCacheContainer.get( 0 ).resetAvoidUsualPlanCycle();
-            minimumGroupedCacheContainer = getMinimumGroupedCacheContainer(
-                    this.cacheContainer.stream().mapToInt( CacheEntry::getScore ).filter( value -> value != getMinimumValue( this.cacheContainer.stream().mapToInt( CacheEntry::getScore ) ) ), groupedCacheContainer );
+            minimumGroupedCacheContainerByScore.get( 0 ).resetAvoidUsualPlanCycle();
+
+            minimumGroupedCacheContainerByScore =
+                    getMinimumGroupedCacheContainer(
+                            this.cacheContainer.stream()
+                                    .mapToInt( CacheEntry::getScore )
+                                    .filter( value -> value != getMinimumValue( this.cacheContainer.stream().mapToInt( CacheEntry::getScore ) ) ), groupedCacheEntriesByScores );
+
         }
-        return refreshCacheContainer( minimumGroupedCacheContainer, this.cacheContainer );
+
+        return refreshCacheContainer( minimumGroupedCacheContainerByScore, this.cacheContainer );
     }
 
     private void refreshCache() {
@@ -100,11 +107,9 @@ public class CacheManager {
         log.info( "Inside createNewCacheEntry" );
 
         refreshCache();
-        boolean IsCacheEntryDone = cacheContainer.add( new CacheEntry( fileToBeCached, 1, 1 ) );
-        log.info( "IsCacheEntryDone----------> " + IsCacheEntryDone );
-        if (IsCacheEntryDone)
-            return fileDirectoryManger.createFileInCache( fileToBeCached ) ? Boolean.TRUE : Boolean.FALSE;
-        return Boolean.FALSE;
+        boolean isCacheEntryDone = cacheContainer.add( new CacheEntry( fileToBeCached, 1, 1 ) );
+        log.info( "IsCacheEntryDone ----------> " + isCacheEntryDone );
+        return (isCacheEntryDone && fileDirectoryManger.createFileInCache( fileToBeCached )) ? Boolean.TRUE : Boolean.FALSE;
     }
 
 
@@ -112,7 +117,7 @@ public class CacheManager {
         return new ArrayList<>( this.cacheContainer );
     }
 
-    private Boolean incrementScoreOfCacheEntry(FileToBeCached cachedFileToBeUpdated) {
+    private boolean incrementScoreOfCacheEntry(FileToBeCached cachedFileToBeUpdated) {
         for (CacheEntry cacheEntry : this.cacheContainer) {
             if (cacheEntry.getCacheInFileSystem().getFileName().equals( cachedFileToBeUpdated.getFileName() )) {
                 return cacheEntry.incrementScore();
