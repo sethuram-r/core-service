@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import smarshare.coreservice.cache.DescendingScoreComparator;
-import smarshare.coreservice.cache.FileDirectoryManger;
+import smarshare.coreservice.cache.FileSystemManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,15 +19,15 @@ import java.util.stream.IntStream;
 public class CacheManager {
 
 
-    private final FileDirectoryManger fileDirectoryManger;
+    private final FileSystemManager fileSystemManager;
     private final DescendingScoreComparator descendingScoreComparator;
     private List<CacheEntry> cacheContainer;
     private int maxLimitOfCacheContainer = 10;
 
 
     @Autowired
-    CacheManager(FileDirectoryManger fileDirectoryManger, DescendingScoreComparator descendingScoreComparator) {
-        this.fileDirectoryManger = fileDirectoryManger;
+    CacheManager(FileSystemManager fileSystemManager, DescendingScoreComparator descendingScoreComparator) {
+        this.fileSystemManager = fileSystemManager;
         this.descendingScoreComparator = descendingScoreComparator;
         this.cacheContainer = new ArrayList<>() {
             @Override
@@ -71,7 +71,7 @@ public class CacheManager {
         CacheEntry cacheEntryToBeRemoved = minimumGroupedCacheContainer.get( 0 );
         FileToBeCached correspondingFileOfCacheEntryToBeDeleted = cacheEntryToBeRemoved.getCacheInFileSystem();
         if (cacheContainer.remove( cacheEntryToBeRemoved )) {
-            fileDirectoryManger.deleteFileInCache( correspondingFileOfCacheEntryToBeDeleted.getFileName() );
+            fileSystemManager.deleteFileInCache( correspondingFileOfCacheEntryToBeDeleted.getFileName() );
             return Boolean.TRUE;
         } else return Boolean.FALSE;
     }
@@ -109,7 +109,7 @@ public class CacheManager {
         refreshCache();
         boolean isCacheEntryDone = cacheContainer.add( new CacheEntry( fileToBeCached, 1, 1 ) );
         log.info( "IsCacheEntryDone ----------> " + isCacheEntryDone );
-        return (isCacheEntryDone && fileDirectoryManger.createFileInCache( fileToBeCached )) ? Boolean.TRUE : Boolean.FALSE;
+        return (isCacheEntryDone && fileSystemManager.createFileInCache( fileToBeCached )) ? Boolean.TRUE : Boolean.FALSE;
     }
 
 
@@ -137,7 +137,7 @@ public class CacheManager {
 
         if (incrementScoreOfCacheEntry( cachedFileToBeUpdated )) {
             cacheContainer.sort( descendingScoreComparator );
-            if (fileDirectoryManger.updateFileInCache( cachedFileToBeUpdated )) return true;
+            if (fileSystemManager.updateFileInCache( cachedFileToBeUpdated )) return true;
             this.cacheContainer = cacheContainerSnapShotBeforeUpdate;
         }
         return false;
@@ -152,7 +152,7 @@ public class CacheManager {
 
         boolean removed = this.cacheContainer.removeIf( cacheEntry -> cacheEntry.getCacheInFileSystem().getFileName().equals( cachedFileToBeDeleted ) );
         if (removed) {
-            boolean cacheRemoved = fileDirectoryManger.deleteFileInCache( cachedFileToBeDeleted );
+            boolean cacheRemoved = fileSystemManager.deleteFileInCache( cachedFileToBeDeleted );
             if (cacheRemoved) return true;
             this.cacheContainer = cacheContainerSnapShotBeforeDelete;
         }
@@ -164,7 +164,7 @@ public class CacheManager {
 
         log.info( "Inside getCachedObject" );
 
-        FileToBeCached cachedFileToBeRetrieved = fileDirectoryManger.retrieveCachedFile( fileName );
+        FileToBeCached cachedFileToBeRetrieved = fileSystemManager.retrieveCachedFile( fileName );
         if (null != cachedFileToBeRetrieved) {
             incrementScoreOfCacheEntry( cachedFileToBeRetrieved );
             return cachedFileToBeRetrieved;

@@ -18,7 +18,7 @@ import static java.nio.file.Files.*;
 
 @Slf4j
 @Service
-public class FileDirectoryManger {
+public class FileSystemManager {
 
     private final String fileDirectory = "Cache/";
 
