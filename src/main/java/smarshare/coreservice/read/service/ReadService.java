@@ -29,7 +29,7 @@ public class ReadService implements AccessManager {
     private final LockServerAPIService lockServerAPIService;
     private final AccessManagementAPIService accessManagementAPIService;
     private final CacheManager cacheManager;
-    private List<Bucket> bucketList = new ArrayList<>();
+    private final List<Bucket> bucketList = new ArrayList<>();
 
 
     @Autowired
@@ -42,21 +42,14 @@ public class ReadService implements AccessManager {
 
     }
 
-    private List<Bucket> getBucketListFromS3() {
-        log.info( "Inside getBucketListFromS3" );
-        if (bucketList.isEmpty()) {
-            this.bucketList = s3ReadService.listBuckets();
-        }
-        return bucketList;
-    }
 
     public List<Bucket> getBucketsByUserId(int userId) {
         log.info( "Inside getBucketsByUserNameAndEmail" );
-        List<Bucket> bucketsInS3 = getBucketListFromS3();
+
+        List<Bucket> bucketsInS3 = s3ReadService.listBuckets();
         Map<String, BucketMetadata> bucketsMetadata = accessManagementAPIService.getAllBucketsMetaDataByUserId( userId ).stream()
                 .collect( Collectors.toMap( BucketMetadata::getBucketName, Function.identity() ) );
         if (!bucketsInS3.isEmpty() && !bucketsMetadata.isEmpty()) {
-
             bucketsInS3.forEach( bucket -> {
                 if (bucketsMetadata.containsKey( bucket.getName() ))
                     bucket.setAccess( bucketsMetadata.get( bucket.getName() ) );
